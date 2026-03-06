@@ -80,9 +80,6 @@ TrustLance is a blockchain-based escrow platform built on Stellar that enables s
 - ✅ Success/error notifications
 - ✅ Mobile responsive design
 
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 Wallet connected state:
 <img width="1792" height="787" alt="Screenshot 2026-03-06 191517" src="https://github.com/user-attachments/assets/8426fcd0-f05e-4b20-bb77-d209dbcfaa5e" />
@@ -95,6 +92,10 @@ Successful testnet transaction
 
 The transaction result is shown to the user
 <img width="1802" height="801" alt="Screenshot 2026-03-06 191808" src="https://github.com/user-attachments/assets/d8d5d2f2-c8ef-4b21-a6f7-f6a2190532c2" />
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
