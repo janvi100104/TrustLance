@@ -1,6 +1,6 @@
 /**
  * Stellar Wallet Utilities using StellarWalletsKit
- * Supports: Freighter, xBull, Albedo, LOBSTR, Rabet, Hana, Hot Wallet, Klever, Ledger, Trezor
+ * Supports: Freighter, xBull, Albedo, LOBSTR, Rabet, Hana, Hot Wallet, Klever
  */
 
 import { StellarWalletsKit } from '@creit.tech/stellar-wallets-kit/sdk';
@@ -103,8 +103,8 @@ export const getWalletById = (walletId: string): WalletInfo | undefined => {
 };
 
 /**
- * Connect to a specific wallet using the auth modal
- * The modal will automatically show installed wallets first
+ * Connect to a specific wallet
+ * This directly connects without using the authModal
  */
 export const connectWallet = async (walletId?: string): Promise<{
   publicKey: string;
@@ -114,36 +114,39 @@ export const connectWallet = async (walletId?: string): Promise<{
   try {
     console.log('[Wallet] Starting connection...', { walletId });
     
+    if (!walletId) {
+      throw new Error('No wallet selected');
+    }
+
     // Ensure kit is initialized
     ensureInitialized();
 
-    // If walletId is provided, set it first using static method
-    if (walletId) {
-      console.log('[Wallet] Setting wallet:', walletId);
-      StellarWalletsKit.setWallet(walletId);
-    }
+    // Set the wallet using static method
+    console.log('[Wallet] Setting wallet:', walletId);
+    StellarWalletsKit.setWallet(walletId);
 
-    console.log('[Wallet] Selected module:', StellarWalletsKit.selectedModule?.productId);
-
-    // Show authentication modal to connect
-    // This will show the wallet selection UI
-    const result = await StellarWalletsKit.authModal();
-    console.log('[Wallet] Auth result:', result);
-
-    // Check if user closed the modal (result will be null/undefined)
-    if (!result || !result.address) {
-      // User closed the modal without selecting a wallet
-      console.log('[Wallet] User closed modal');
-      const cancelError = new Error('The user closed the modal.');
-      (cancelError as any).code = 'MODAL_CLOSED';
-      throw cancelError;
-    }
-
-    // Get the current wallet info from the active module
+    // Get the module for this wallet
     const currentModule = StellarWalletsKit.selectedModule;
+    console.log('[Wallet] Selected module:', currentModule?.productId);
 
     if (!currentModule) {
-      throw new Error('No wallet module selected');
+      throw new Error('Wallet module not found');
+    }
+
+    // Check if wallet is available
+    const isAvailable = await currentModule.isAvailable();
+    if (!isAvailable) {
+      const wallet = getWalletById(walletId);
+      throw new Error(`${wallet?.name} is not installed. Please install it first.`);
+    }
+
+    // Get the public key directly from the wallet
+    console.log('[Wallet] Getting address...');
+    const result = await currentModule.getAddress();
+    console.log('[Wallet] Address result:', result);
+
+    if (!result || !result.address) {
+      throw new Error('Failed to get wallet address');
     }
 
     const walletInfo = currentModule.getWalletInfo();
@@ -161,18 +164,13 @@ export const connectWallet = async (walletId?: string): Promise<{
       stack: error.stack,
     });
     
-    // Don't log modal close as an error - it's a normal user action
-    if (error.code !== 'MODAL_CLOSED') {
-      console.error('Error connecting wallet:', error);
-    }
-
     // Handle specific error types
-    if (error.code === 'MODAL_CLOSED' ||
-        error.message?.includes('rejected') ||
+    if (error.message?.includes('rejected') || 
         error.message?.includes('cancelled') ||
-        error.message?.includes('closed')) {
-      // Re-throw with proper code for UI handling
-      const userCancelledError = new Error('The user closed the modal.');
+        error.message?.includes('closed') ||
+        error.code === -1) {
+      // User cancelled
+      const userCancelledError = new Error('Wallet connection cancelled');
       (userCancelledError as any).code = 'USER_CANCELLED';
       throw userCancelledError;
     }
@@ -192,7 +190,6 @@ export const disconnectWallet = async (): Promise<void> => {
     await StellarWalletsKit.disconnect();
   } catch (error) {
     console.error('Error disconnecting wallet:', error);
-    // Continue with local state reset even if disconnect fails
   }
 };
 
@@ -370,23 +367,4 @@ export const checkAnyWalletInstalled = async (): Promise<{ installed: boolean; w
   } catch (error) {
     return { installed: false };
   }
-};
-
-/**
- * Get all available wallets with their installation status
- */
-export const getAvailableWallets = async (): Promise<
-  Array<WalletInfo & { installed: boolean }>
-> => {
-  const wallets: Array<WalletInfo & { installed: boolean }> = [];
-
-  for (const wallet of SUPPORTED_WALLETS) {
-    const installed = await isWalletInstalled(wallet.id);
-    wallets.push({
-      ...wallet,
-      installed,
-    });
-  }
-
-  return wallets;
 };
