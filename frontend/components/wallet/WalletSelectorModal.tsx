@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Wallet, Loader2, AlertCircle } from 'lucide-react';
+import { Wallet, Loader2, AlertCircle, ExternalLink, CheckCircle } from 'lucide-react';
 import { SUPPORTED_WALLETS, openInstallUrl, isWalletInstalled } from '@/lib/stellar/wallet';
 import { cn } from '@/lib/utils';
 
@@ -17,8 +17,39 @@ interface WalletSelectorModalProps {
 export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: WalletSelectorModalProps) {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [installedWallets, setInstalledWallets] = useState<Record<string, boolean>>({});
+  const [checkingInstallation, setCheckingInstallation] = useState(true);
+
+  // Check which wallets are installed when modal opens
+  useEffect(() => {
+    if (open) {
+      checkAllWallets();
+    }
+  }, [open]);
+
+  const checkAllWallets = async () => {
+    setCheckingInstallation(true);
+    const results: Record<string, boolean> = {};
+    
+    for (const wallet of SUPPORTED_WALLETS) {
+      try {
+        results[wallet.id] = await isWalletInstalled(wallet.id);
+      } catch {
+        results[wallet.id] = false;
+      }
+    }
+    
+    setInstalledWallets(results);
+    setCheckingInstallation(false);
+  };
 
   const handleWalletClick = async (walletId: string) => {
+    // If wallet is not installed, open install URL
+    if (!installedWallets[walletId]) {
+      openInstallUrl(walletId);
+      return;
+    }
+
+    // Wallet is installed, proceed with connection
     setConnecting(walletId);
     try {
       await onWalletSelect(walletId);
@@ -37,10 +68,6 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
     }
   };
 
-  const handleInstall = (walletId: string) => {
-    openInstallUrl(walletId);
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -51,96 +78,114 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
           </DialogTitle>
           <DialogDescription>
             Choose a wallet to connect to TrustLance.
-            Select your preferred wallet from the list below.
+            {checkingInstallation ? (
+              <span className="flex items-center gap-2 mt-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Checking installed wallets...
+              </span>
+            ) : (
+              <p className="mt-1 text-xs">
+                💡 Installed wallets are highlighted. Click "Install" for wallets you want to add.
+              </p>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 py-4">
-          {SUPPORTED_WALLETS.map((wallet) => (
-            <Card
-              key={wallet.id}
-              className={cn(
-                'transition-all hover:shadow-md cursor-pointer',
-                connecting === wallet.id && 'opacity-50 pointer-events-none'
-              )}
-            >
-              <CardHeader className="p-4">
-                <div className="flex items-center gap-4">
-                  {/* Wallet Icon */}
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                    {wallet.iconUrl ? (
-                      <img
-                        src={wallet.iconUrl}
-                        alt={wallet.name}
-                        className="w-8 h-8 object-contain"
-                      />
-                    ) : (
-                      <Wallet className="w-6 h-6 text-white" />
-                    )}
-                  </div>
+          {SUPPORTED_WALLETS.map((wallet) => {
+            const isInstalled = installedWallets[wallet.id];
+            const isConnecting = connecting === wallet.id;
 
-                  {/* Wallet Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-base">{wallet.name}</CardTitle>
+            return (
+              <Card
+                key={wallet.id}
+                className={cn(
+                  'transition-all hover:shadow-md',
+                  isConnecting && 'opacity-50 pointer-events-none',
+                  isInstalled && 'border-green-300 bg-green-50',
+                  !isInstalled && 'border-gray-200'
+                )}
+              >
+                <CardHeader className="p-4">
+                  <div className="flex items-center gap-4">
+                    {/* Wallet Icon */}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 relative">
+                      {wallet.iconUrl ? (
+                        <img
+                          src={wallet.iconUrl}
+                          alt={wallet.name}
+                          className="w-8 h-8 object-contain"
+                        />
+                      ) : (
+                        <Wallet className="w-6 h-6 text-white" />
+                      )}
+                      {isInstalled && (
+                        <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5">
+                          <CheckCircle className="h-3 w-3 text-white" />
+                        </div>
+                      )}
                     </div>
-                    <CardDescription className="text-sm">
-                      {wallet.description}
-                    </CardDescription>
-                  </div>
 
-                  {/* Action Button */}
-                  <div>
-                    {wallet.installUrl ? (
-                      <Button
-                        onClick={() => handleWalletClick(wallet.id)}
-                        disabled={connecting === wallet.id}
-                        className="min-w-[100px]"
-                        variant="default"
-                      >
-                        {connecting === wallet.id ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Connecting...
-                          </>
-                        ) : (
-                          'Connect'
+                    {/* Wallet Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-base">{wallet.name}</CardTitle>
+                        {isInstalled && (
+                          <span className="text-xs text-green-600 font-medium">Installed</span>
                         )}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => handleWalletClick(wallet.id)}
-                        disabled={connecting === wallet.id}
-                        className="min-w-[100px]"
-                        variant="outline"
-                      >
-                        {connecting === wallet.id ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Connecting...
-                          </>
-                        ) : (
-                          'Connect'
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
+                      </div>
+                      <CardDescription className="text-sm">
+                        {wallet.description}
+                      </CardDescription>
+                    </div>
 
-              {/* Additional Info for wallets without install URL */}
-              {!wallet.installUrl && (
-                <CardContent className="pt-0 pb-4 px-4">
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                      {wallet.name} is a web-based wallet. Click "Connect" to use it directly in your browser.
-                    </span>
+                    {/* Action Button */}
+                    <div>
+                      {isInstalled ? (
+                        <Button
+                          onClick={() => handleWalletClick(wallet.id)}
+                          disabled={isConnecting}
+                          className="min-w-[100px]"
+                          variant="default"
+                        >
+                          {isConnecting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Connecting...
+                            </>
+                          ) : (
+                            'Connect'
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => handleWalletClick(wallet.id)}
+                          disabled={isConnecting}
+                          className="min-w-[100px]"
+                          variant="outline"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Install
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              )}
-            </Card>
-          ))}
+                </CardHeader>
+
+                {/* Additional Info for wallets without install URL */}
+                {!wallet.installUrl && (
+                  <CardContent className="pt-0 pb-4 px-4">
+                    <div className="flex items-start gap-2 text-sm text-gray-600">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {wallet.name} is a web-based wallet. Click "Connect" to use it directly in your browser.
+                      </span>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
         </div>
 
         {/* Footer */}
@@ -150,6 +195,9 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
             <p>
               We recommend starting with{' '}
               <strong className="text-blue-600">Freighter</strong> - the most popular choice for Stellar.
+            </p>
+            <p className="text-xs mt-2">
+              Make sure to install the wallet extension before connecting.
             </p>
           </div>
         </div>
