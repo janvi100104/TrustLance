@@ -11,11 +11,11 @@ import {
   StrKey,
   Address,
   TransactionBuilder,
+  Transaction,
   BASE_FEE,
   xdr,
 } from '@stellar/stellar-sdk';
 import * as freighter from '@stellar/freighter-api';
-import { getKit } from './wallet';
 
 // Contract configuration
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'TESTNET';
@@ -111,7 +111,7 @@ async function buildAndSubmitTransaction(
     });
 
     // Parse signed transaction
-    const signedTxXDR = typeof signedTx === 'string' ? signedTx : signedTx.signedTransactionXdr;
+    const signedTxXDR = typeof signedTx === 'string' ? signedTx : signedTx.signedTxXdr;
     const parsedTx = TransactionBuilder.fromXDR(signedTxXDR, NETWORK_PASSPHRASE) as Transaction;
 
     // Submit transaction
@@ -131,7 +131,8 @@ async function buildAndSubmitTransaction(
     }
 
     if (txResponse.status === 'FAILED') {
-      throw new Error(`Transaction failed: ${txResponse.result?.result?.code || 'Unknown error'}`);
+      const errorCode = 'result' in txResponse ? (txResponse.result as any)?.code : 'Unknown error';
+      throw new Error(`Transaction failed: ${errorCode || 'Unknown error'}`);
     }
 
     // Get result
@@ -206,16 +207,25 @@ export async function initializeEscrow(
     }
 
     const publicKey = addressResult.address!;
+    const contract = getEscrowContract();
 
-    // NOTE: Soroban SDK v14 has breaking changes in Contract.call() serialization
-    // For now, create escrow locally. Real Soroban integration requires SDK v11 or custom serialization
-    // TODO: Fix Soroban integration when SDK stabilizes
-    
-    // Return success with local escrow ID
+    // Build and submit real Soroban transaction
+    const txResult = await buildAndSubmitTransaction(
+      contract,
+      'initialize',
+      [
+        new Address(freelancerAddress),
+        amount,
+        deadline,
+        metadata,
+      ],
+      publicKey
+    );
+
     return {
       success: true,
-      transactionHash: 'local-' + Date.now(),
-      result: BigInt(Date.now()),
+      transactionHash: txResult.hash,
+      result: txResult.result,
     };
 
   } catch (error: any) {
@@ -489,13 +499,13 @@ export async function refundEscrow(escrowId: bigint): Promise<ContractCallResult
  * @returns Escrow data or null
  */
 export async function getEscrowDetails(escrowId: bigint): Promise<EscrowData | null> {
+  if (!ESCROW_CONTRACT_ID) {
+    throw new Error('Contract not deployed');
+  }
+
+  const contract = getEscrowContract();
+
   try {
-    if (!ESCROW_CONTRACT_ID) {
-      throw new Error('Contract not deployed');
-    }
-
-    const contract = getEscrowContract();
-
     // Use simulateTransaction for read-only calls
     const tx = new TransactionBuilder(
       await server.getAccount(ESCROW_CONTRACT_ID),
@@ -504,22 +514,25 @@ export async function getEscrowDetails(escrowId: bigint): Promise<EscrowData | n
         networkPassphrase: NETWORK_PASSPHRASE,
       }
     )
-      .addOperation(contract.call('get_escrow', escrowId))
+      .addOperation(contract.call('get_escrow', xdr.ScVal.scvU64(new xdr.Uint64(escrowId))))
       .setTimeout(30)
       .build();
 
     const response = await server.simulateTransaction(tx);
 
-    if (response.error) {
+    // Check for simulation error (SDK v14+ uses different structure)
+    if ('error' in response && response.error) {
       console.error('Get escrow simulation error:', response.error);
       return null;
     }
 
-    if (response.results && response.results[0]) {
-      const result = response.results[0].xdr as string;
+    // Access results using type assertion (SDK v14+ union type workaround)
+    const simResponse = response as any;
+    if (simResponse.results && simResponse.results[0]) {
+      const result = simResponse.results[0].xdr as string;
       // Parse the XDR result
       const xdrResult = xdr.ScVal.fromXDR(result, 'base64');
-      
+
       // Convert to EscrowData (simplified - in production, parse properly)
       return {
         id: escrowId,
@@ -563,18 +576,19 @@ export async function getEscrowStatus(
         networkPassphrase: NETWORK_PASSPHRASE,
       }
     )
-      .addOperation(contract.call('get_status', escrowId))
+      .addOperation(contract.call('get_status', xdr.ScVal.scvU64(new xdr.Uint64(escrowId))))
       .setTimeout(30)
       .build();
 
     const response = await server.simulateTransaction(tx);
 
-    if (response.error || !response.results) {
+    if (('error' in response && response.error) || !('results' in response) || !response.results) {
       return null;
     }
 
-    // Parse status from result
-    const result = response.results[0].xdr as string;
+    // Parse status from result (use any to workaround SDK v14 strict typing)
+    const simResponse = response as any;
+    const result = simResponse.results[0].xdr as string;
     const xdrResult = xdr.ScVal.fromXDR(result, 'base64');
     
     // Convert to status string (simplified)
@@ -610,15 +624,18 @@ export async function getEscrowCount(): Promise<bigint> {
 
     const response = await server.simulateTransaction(tx);
 
-    if (response.error || !response.results) {
+    if (('error' in response && response.error) || !('results' in response) || !response.results) {
       return BigInt(0);
     }
 
-    const result = response.results[0].xdr as string;
+    // Parse u64 from result (use any to workaround SDK v14 strict typing)
+    const simResponse = response as any;
+    const result = simResponse.results[0].xdr as string;
     const xdrResult = xdr.ScVal.fromXDR(result, 'base64');
     
-    // Parse u64 from result
-    return xdrResult.value();
+    // Parse u64 from result - cast to any for SDK v14 compatibility
+    const value = (xdrResult as any).value();
+    return BigInt(value ?? 0);
   } catch (error: any) {
     console.error('Get escrow count failed:', error);
     return BigInt(0);

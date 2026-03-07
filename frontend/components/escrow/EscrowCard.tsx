@@ -98,7 +98,7 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
-          <span>{error.message || 'Funding failed'}</span>
+          <span>{err.message || 'Funding failed'}</span>
         </div>
       );
     } finally {
@@ -168,7 +168,7 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
-          <span>{error.message || 'Release failed'}</span>
+          <span>{err.message || 'Release failed'}</span>
         </div>
       );
     } finally {
@@ -219,7 +219,7 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
-          <span>{error.message || 'Refund failed'}</span>
+          <span>{err.message || 'Refund failed'}</span>
         </div>
       );
     } finally {

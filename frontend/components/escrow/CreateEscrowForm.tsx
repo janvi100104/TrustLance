@@ -155,7 +155,7 @@ export function CreateEscrowForm() {
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
-          <span>{error.message || 'Escrow creation failed'}</span>
+          <span>{err.message || 'Escrow creation failed'}</span>
         </div>
       );
     } finally {

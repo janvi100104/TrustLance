@@ -260,7 +260,7 @@ export const getCurrentWalletInfo = async (): Promise<{
 export const signTransaction = async (transactionXdr: string): Promise<string> => {
   try {
     const result = await StellarWalletsKit.signTransaction(transactionXdr);
-    return result.signedTransactionXdr;
+    return result.signedTxXdr;
   } catch (error: any) {
     console.error('Error signing transaction:', error);
 
@@ -284,7 +284,7 @@ export const validateNetwork = async (): Promise<{
   const expectedNetwork = NETWORK;
 
   try {
-    const network = StellarWalletsKit.getNetwork();
+    const network = await StellarWalletsKit.getNetwork();
 
     const networkMap: Record<string, string> = {
       [Networks.PUBLIC]: 'PUBLIC',
@@ -292,7 +292,7 @@ export const validateNetwork = async (): Promise<{
       [Networks.FUTURENET]: 'FUTURENET',
     };
 
-    const currentNetwork = networkMap[network] || network;
+    const currentNetwork = networkMap[network.network] || network.network;
     const normalizedExpected = networkMap[expectedNetwork] || expectedNetwork;
 
     const isValid = currentNetwork === normalizedExpected;
