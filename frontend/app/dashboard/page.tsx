@@ -32,43 +32,20 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-// Sample escrow data
-const sampleEscrows = [
-  {
-    id: 'ESC-001',
-    title: 'Website Redesign',
-    client: 'GBDZ...542F',
-    freelancer: 'GAJK...44QP',
-    amount: 100,
-    status: 'funded',
-    createdAt: '2024-01-15',
-  },
-  {
-    id: 'ESC-002',
-    title: 'Logo Design',
-    client: 'GABC...123D',
-    freelancer: 'GAJK...44QP',
-    amount: 50,
-    status: 'created',
-    createdAt: '2024-01-14',
-  },
-  {
-    id: 'ESC-003',
-    title: 'Mobile App Development',
-    client: 'GBDZ...542F',
-    freelancer: 'GXYZ...789E',
-    amount: 500,
-    status: 'released',
-    createdAt: '2024-01-10',
-  },
-];
-
 type DashboardTab = 'overview' | 'create-escrow' | 'send-payment' | 'escrows';
 
 export default function DashboardPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
-  const [selectedEscrow, setSelectedEscrow] = useState<typeof sampleEscrows[0] | null>(null);
+  const [selectedEscrow, setSelectedEscrow] = useState<{
+    id: string;
+    title: string;
+    client: string;
+    freelancer: string;
+    amount: number;
+    status: string;
+    createdAt: string;
+  } | null>(null);
   const { publicKey, balance, isConnected } = useWallet();
   const { escrows, getEscrowsByUser } = useEscrowStore();
 
@@ -285,7 +262,7 @@ export default function DashboardPage() {
                               freelancer: escrow.freelancer,
                               amount: escrow.amount,
                               status: escrow.status,
-                              createdAt: escrow.createdAt.toISOString().split('T')[0]
+                              createdAt: escrow.createdAt instanceof Date ? escrow.createdAt.toISOString().split('T')[0] : new Date(escrow.createdAt).toISOString().split('T')[0]
                             })}
                             className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                           >

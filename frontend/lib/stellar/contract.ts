@@ -84,13 +84,19 @@ async function buildAndSubmitTransaction(
   publicKey: string
 ): Promise<{ hash: string; result?: any }> {
   try {
+    console.log('[Contract] Building transaction for method:', method);
+    console.log('[Contract] Args:', args);
+    
     // Get account from network
     const account = await server.getAccount(publicKey);
+    console.log('[Contract] Account fetched:', account.accountId());
 
-    // Build the contract call operation using Soroban operation
+    // Build the contract call operation
+    // SDK v14 should handle conversion, but we'll help it
     const operation = contract.call(method, ...args);
+    console.log('[Contract] Operation built');
 
-    // Build transaction with Soroban-specific settings
+    // Build transaction
     let tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
       networkPassphrase: NETWORK_PASSPHRASE,
@@ -102,26 +108,33 @@ async function buildAndSubmitTransaction(
       .addOperation(operation)
       .build();
 
+    console.log('[Contract] Transaction built, preparing...');
+
     // Prepare transaction (simulate and add resources)
     tx = await server.prepareTransaction(tx);
+    console.log('[Contract] Transaction prepared');
 
     // Sign with Freighter
     const signedTx = await freighter.signTransaction(tx.toXDR(), {
       networkPassphrase: NETWORK_PASSPHRASE,
     });
+    console.log('[Contract] Transaction signed');
 
     // Parse signed transaction
     const signedTxXDR = typeof signedTx === 'string' ? signedTx : signedTx.signedTxXdr;
     const parsedTx = TransactionBuilder.fromXDR(signedTxXDR, NETWORK_PASSPHRASE) as Transaction;
 
     // Submit transaction
+    console.log('[Contract] Submitting transaction...');
     const sendResponse = await server.sendTransaction(parsedTx);
+    console.log('[Contract] Transaction submitted:', sendResponse.hash);
 
     if (sendResponse.status !== 'PENDING') {
       throw new Error(`Transaction submission failed: ${sendResponse.status}`);
     }
 
     // Wait for transaction completion
+    console.log('[Contract] Waiting for confirmation...');
     let txResponse = await server.getTransaction(sendResponse.hash);
 
     // Poll until transaction is complete
@@ -130,6 +143,8 @@ async function buildAndSubmitTransaction(
       txResponse = await server.getTransaction(sendResponse.hash);
     }
 
+    console.log('[Contract] Transaction confirmed:', txResponse.status);
+
     if (txResponse.status === 'FAILED') {
       const errorCode = 'result' in txResponse ? (txResponse.result as any)?.code : 'Unknown error';
       throw new Error(`Transaction failed: ${errorCode || 'Unknown error'}`);
@@ -137,13 +152,14 @@ async function buildAndSubmitTransaction(
 
     // Get result
     const returnValue = txResponse.returnValue;
-    
+    console.log('[Contract] Return value:', returnValue);
+
     return {
       hash: sendResponse.hash,
       result: returnValue,
     };
   } catch (error: any) {
-    console.error('Transaction build/submit failed:', error);
+    console.error('[Contract] Transaction error:', error);
     throw error;
   }
 }
@@ -210,13 +226,14 @@ export async function initializeEscrow(
     const contract = getEscrowContract();
 
     // Build and submit real Soroban transaction
+    // SDK v14 should handle BigInt serialization automatically
     const txResult = await buildAndSubmitTransaction(
       contract,
       'initialize',
       [
         new Address(freelancerAddress),
-        amount,
-        deadline,
+        BigInt(amount),
+        BigInt(deadline),
         metadata,
       ],
       publicKey
@@ -230,7 +247,7 @@ export async function initializeEscrow(
 
   } catch (error: any) {
     console.error('Initialize escrow failed:', error);
-    
+
     // Handle specific error types
     if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
       return {
