@@ -149,7 +149,13 @@ export const connectWallet = async (walletId?: string): Promise<{
       throw new Error('Failed to get wallet address');
     }
 
-    const walletInfo = currentModule.getWalletInfo();
+    // Build wallet info from module properties
+    const walletInfo = {
+      id: currentModule.productId,
+      name: currentModule.productName,
+      iconUrl: currentModule.productIcon,
+    };
+    
     console.log('[Wallet] Connected:', walletInfo);
 
     return {
@@ -234,11 +240,9 @@ export const getCurrentWalletInfo = async (): Promise<{
       return null;
     }
 
-    const walletInfo = currentModule.getWalletInfo();
-
     return {
-      walletId: walletInfo.id,
-      walletName: walletInfo.name,
+      walletId: currentModule.productId,
+      walletName: currentModule.productName,
       publicKey: addressResult.address,
     };
   } catch (error) {
