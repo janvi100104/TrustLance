@@ -206,8 +206,11 @@ export const getWalletAddress = async (): Promise<string | null> => {
   try {
     const result = await StellarWalletsKit.getAddress();
     return result.address || null;
-  } catch (error) {
-    console.error('Error getting wallet address:', error);
+  } catch (error: any) {
+    // Don't log error if wallet not connected - this is expected
+    if (error.code !== -1 && !error.message?.includes('No wallet')) {
+      console.error('Error getting wallet address:', error);
+    }
     return null;
   }
 };
@@ -333,25 +336,27 @@ export const openInstallUrl = (walletId: string): void => {
  */
 export const isWalletInstalled = async (walletId: string): Promise<boolean> => {
   try {
-    // Save current selection
-    const previousModule = StellarWalletsKit.selectedModule;
-
+    // Ensure kit is initialized
+    ensureInitialized();
+    
     try {
+      // Try setting the wallet
       StellarWalletsKit.setWallet(walletId);
       const module = StellarWalletsKit.selectedModule;
-      const isInstalled = await module.isAvailable();
-
-      // Restore previous selection
-      if (previousModule && previousModule.productId !== walletId) {
-        StellarWalletsKit.setWallet(previousModule.productId);
+      
+      if (!module) {
+        return false;
       }
-
+      
+      // Check if available
+      const isInstalled = await module.isAvailable();
       return isInstalled;
-    } catch {
+    } catch (err: any) {
+      // If setWallet throws or module unavailable
       return false;
     }
-  } catch (error) {
-    console.error(`Error checking if ${walletId} is installed:`, error);
+  } catch {
+    // Silently fail - don't show error to user during installation check
     return false;
   }
 };

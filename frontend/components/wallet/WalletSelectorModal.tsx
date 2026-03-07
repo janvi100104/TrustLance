@@ -31,11 +31,8 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
     const results: Record<string, boolean> = {};
     
     for (const wallet of SUPPORTED_WALLETS) {
-      try {
-        results[wallet.id] = await isWalletInstalled(wallet.id);
-      } catch {
-        results[wallet.id] = false;
-      }
+      // Don't log errors during installation check
+      results[wallet.id] = await isWalletInstalled(wallet.id);
     }
     
     setInstalledWallets(results);
@@ -84,9 +81,9 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
                 Checking installed wallets...
               </span>
             ) : (
-              <p className="mt-1 text-xs">
+              <span className="mt-1 text-xs block">
                 💡 Installed wallets are highlighted. Click "Install" for wallets you want to add.
-              </p>
+              </span>
             )}
           </DialogDescription>
         </DialogHeader>
