@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ExternalLink, Wallet, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { SUPPORTED_WALLETS, type WalletInfo, openInstallUrl } from '@/lib/stellar/wallet';
+import { Wallet, Loader2, AlertCircle } from 'lucide-react';
+import { SUPPORTED_WALLETS, openInstallUrl, isWalletInstalled } from '@/lib/stellar/wallet';
 import { cn } from '@/lib/utils';
 
 interface WalletSelectorModalProps {
@@ -16,20 +16,20 @@ interface WalletSelectorModalProps {
 
 export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: WalletSelectorModalProps) {
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [installedWallets, setInstalledWallets] = useState<Record<string, boolean>>({});
 
   const handleWalletClick = async (walletId: string) => {
     setConnecting(walletId);
     try {
       await onWalletSelect(walletId);
-      onOpenChange(false);
+      // Don't close modal here - let the parent handle it based on success
     } catch (error: any) {
       // Don't log or show errors for user cancellation - it's a normal action
       if (error.code === 'USER_CANCELLED' || error.code === 'MODAL_CLOSED') {
-        // Just close the modal silently
-        onOpenChange(false);
+        // Keep modal open for retry
         return;
       }
-      
+
       console.error('Wallet connection failed:', error);
       // Error is handled by the parent component
     } finally {
@@ -61,7 +61,7 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
               key={wallet.id}
               className={cn(
                 'transition-all hover:shadow-md cursor-pointer',
-                !wallet.installUrl && 'opacity-75'
+                connecting === wallet.id && 'opacity-50 pointer-events-none'
               )}
             >
               <CardHeader className="p-4">
@@ -91,21 +91,39 @@ export function WalletSelectorModal({ open, onOpenChange, onWalletSelect }: Wall
 
                   {/* Action Button */}
                   <div>
-                    <Button
-                      onClick={() => handleWalletClick(wallet.id)}
-                      disabled={connecting === wallet.id}
-                      className="min-w-[100px]"
-                      variant={wallet.installUrl ? 'default' : 'outline'}
-                    >
-                      {connecting === wallet.id ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Connecting...
-                        </>
-                      ) : (
-                        'Connect'
-                      )}
-                    </Button>
+                    {wallet.installUrl ? (
+                      <Button
+                        onClick={() => handleWalletClick(wallet.id)}
+                        disabled={connecting === wallet.id}
+                        className="min-w-[100px]"
+                        variant="default"
+                      >
+                        {connecting === wallet.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          'Connect'
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleWalletClick(wallet.id)}
+                        disabled={connecting === wallet.id}
+                        className="min-w-[100px]"
+                        variant="outline"
+                      >
+                        {connecting === wallet.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          'Connect'
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>

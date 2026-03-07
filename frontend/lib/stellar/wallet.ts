@@ -11,14 +11,16 @@ import { Networks } from '@stellar/stellar-sdk';
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'TESTNET';
 const networkPassphrase = NETWORK === 'PUBLIC' ? Networks.PUBLIC : Networks.TESTNET;
 
-// Initialize StellarWalletsKit
+// Initialize StellarWalletsKit as a singleton
 let kit: StellarWalletsKit | null = null;
 
+/**
+ * Get or initialize the StellarWalletsKit instance
+ */
 export const getKit = (): StellarWalletsKit => {
   if (!kit) {
-    kit = new StellarWalletsKit();
-    // Initialize with default modules (all supported wallets)
-    StellarWalletsKit.init({ 
+    // Create new instance
+    kit = new StellarWalletsKit({
       modules: defaultModules(),
       network: networkPassphrase,
     });
@@ -103,20 +105,29 @@ export const connectWallet = async (walletId?: string): Promise<{
   walletName: string;
 }> => {
   try {
+    console.log('[Wallet] Starting connection...', { walletId });
+    
+    // Get or create kit instance
     const kitInstance = getKit();
+    console.log('[Wallet] Kit instance:', !!kitInstance);
 
-    // If walletId is provided, set it first using static method
+    // If walletId is provided, set it first
     if (walletId) {
-      StellarWalletsKit.setWallet(walletId);
+      console.log('[Wallet] Setting wallet:', walletId);
+      kitInstance.setWallet(walletId);
     }
+
+    console.log('[Wallet] Selected module:', kitInstance.selectedModule?.productId);
 
     // Show authentication modal to connect
     // This will show the wallet selection UI
-    const result = await StellarWalletsKit.authModal();
+    const result = await kitInstance.authModal();
+    console.log('[Wallet] Auth result:', result);
 
     // Check if user closed the modal (result will be null/undefined)
     if (!result || !result.address) {
       // User closed the modal without selecting a wallet
+      console.log('[Wallet] User closed modal');
       const cancelError = new Error('The user closed the modal.');
       (cancelError as any).code = 'MODAL_CLOSED';
       throw cancelError;
@@ -124,12 +135,13 @@ export const connectWallet = async (walletId?: string): Promise<{
 
     // Get the current wallet info from the active module
     const currentModule = kitInstance.selectedModule;
-    
+
     if (!currentModule) {
       throw new Error('No wallet module selected');
     }
 
     const walletInfo = currentModule.getWalletInfo();
+    console.log('[Wallet] Connected:', walletInfo);
 
     return {
       publicKey: result.address,
@@ -137,14 +149,20 @@ export const connectWallet = async (walletId?: string): Promise<{
       walletName: walletInfo.name,
     };
   } catch (error: any) {
+    console.error('[Wallet] Connection error:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
+    
     // Don't log modal close as an error - it's a normal user action
     if (error.code !== 'MODAL_CLOSED') {
       console.error('Error connecting wallet:', error);
     }
 
     // Handle specific error types
-    if (error.code === 'MODAL_CLOSED' || 
-        error.message?.includes('rejected') || 
+    if (error.code === 'MODAL_CLOSED' ||
+        error.message?.includes('rejected') ||
         error.message?.includes('cancelled') ||
         error.message?.includes('closed')) {
       // Re-throw with proper code for UI handling
@@ -165,7 +183,8 @@ export const connectWallet = async (walletId?: string): Promise<{
  */
 export const disconnectWallet = async (): Promise<void> => {
   try {
-    await StellarWalletsKit.disconnect();
+    const kitInstance = getKit();
+    await kitInstance.disconnect();
   } catch (error) {
     console.error('Error disconnecting wallet:', error);
     // Continue with local state reset even if disconnect fails
@@ -177,7 +196,8 @@ export const disconnectWallet = async (): Promise<void> => {
  */
 export const getWalletAddress = async (): Promise<string | null> => {
   try {
-    const result = await StellarWalletsKit.getAddress();
+    const kitInstance = getKit();
+    const result = await kitInstance.getAddress();
     return result.address || null;
   } catch (error) {
     console.error('Error getting wallet address:', error);
@@ -207,9 +227,9 @@ export const getCurrentWalletInfo = async (): Promise<{
 } | null> => {
   try {
     const kitInstance = getKit();
-    const currentModule = StellarWalletsKit.selectedModule;
-    const addressResult = await StellarWalletsKit.getAddress();
-    
+    const currentModule = kitInstance.selectedModule;
+    const addressResult = await kitInstance.getAddress();
+
     if (!currentModule || !addressResult.address) {
       return null;
     }
@@ -232,15 +252,16 @@ export const getCurrentWalletInfo = async (): Promise<{
  */
 export const signTransaction = async (transactionXdr: string): Promise<string> => {
   try {
-    const result = await StellarWalletsKit.signTransaction(transactionXdr);
+    const kitInstance = getKit();
+    const result = await kitInstance.signTransaction(transactionXdr);
     return result.signedTransactionXdr;
   } catch (error: any) {
     console.error('Error signing transaction:', error);
-    
+
     if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
       throw new Error('Transaction was cancelled');
     }
-    
+
     throw new Error(error.message || 'Failed to sign transaction');
   }
 };
@@ -255,21 +276,22 @@ export const validateNetwork = async (): Promise<{
   warning?: string;
 }> => {
   const expectedNetwork = NETWORK;
-  
+
   try {
-    const network = StellarWalletsKit.getNetwork();
-    
+    const kitInstance = getKit();
+    const network = kitInstance.getNetwork();
+
     const networkMap: Record<string, string> = {
       [Networks.PUBLIC]: 'PUBLIC',
       [Networks.TESTNET]: 'TESTNET',
       [Networks.FUTURENET]: 'FUTURENET',
     };
-    
+
     const currentNetwork = networkMap[network] || network;
     const normalizedExpected = networkMap[expectedNetwork] || expectedNetwork;
-    
+
     const isValid = currentNetwork === normalizedExpected;
-    
+
     if (!isValid) {
       return {
         isValid: false,
@@ -278,7 +300,7 @@ export const validateNetwork = async (): Promise<{
         warning: `Wallet is set to ${currentNetwork}, but expected ${normalizedExpected}. Please switch your wallet to the correct network.`,
       };
     }
-    
+
     return {
       isValid: true,
       currentNetwork: currentNetwork,
@@ -317,19 +339,21 @@ export const getWalletById = (walletId: string): WalletInfo | undefined => {
  */
 export const isWalletInstalled = async (walletId: string): Promise<boolean> => {
   try {
-    // Try to set the wallet
-    const currentModule = StellarWalletsKit.selectedModule;
-    
+    const kitInstance = getKit();
+
+    // Save current selection
+    const previousModule = kitInstance.selectedModule;
+
     try {
-      StellarWalletsKit.setWallet(walletId);
-      const module = StellarWalletsKit.selectedModule;
+      kitInstance.setWallet(walletId);
+      const module = kitInstance.selectedModule;
       const isInstalled = await module.isInstalled();
-      
-      // Restore previous selection if different
-      if (currentModule && currentModule.productId !== walletId) {
-        // Don't restore, let user keep their choice
+
+      // Restore previous selection
+      if (previousModule && previousModule.productId !== walletId) {
+        kitInstance.setWallet(previousModule.productId);
       }
-      
+
       return isInstalled;
     } catch {
       return false;
@@ -364,7 +388,7 @@ export const getAvailableWallets = async (): Promise<
   Array<WalletInfo & { installed: boolean }>
 > => {
   const wallets: Array<WalletInfo & { installed: boolean }> = [];
-  
+
   for (const wallet of SUPPORTED_WALLETS) {
     const installed = await isWalletInstalled(wallet.id);
     wallets.push({
@@ -372,6 +396,6 @@ export const getAvailableWallets = async (): Promise<
       installed,
     });
   }
-  
+
   return wallets;
 };

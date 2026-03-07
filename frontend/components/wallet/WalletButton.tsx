@@ -37,16 +37,20 @@ export function WalletButton({ variant = 'default' }: { variant?: 'default' | 'n
       await connectWallet(selectedWalletId);
       const wallet = getWalletById(selectedWalletId);
       toast.success(`${wallet?.name || 'Wallet'} connected successfully!`);
+      // Close modal on success
+      setModalOpen(false);
     } catch (error: any) {
       // Don't show error toast for user cancellation
       if (error.code === 'USER_CANCELLED' || error.code === 'MODAL_CLOSED') {
         console.log('Wallet connection cancelled by user');
+        // Keep modal open for retry
         return;
       }
-      
+
       // Error is handled in the store, but we can add additional context
       console.error('Wallet connection failed:', error);
       toast.error(error.message || 'Failed to connect wallet');
+      // Keep modal open for retry
     }
   };
 
