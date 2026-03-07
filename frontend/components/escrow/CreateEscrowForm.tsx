@@ -8,7 +8,7 @@ import { useWallet } from '@/store/useWallet';
 import { useEscrowStore } from '@/store/useEscrowStore';
 import { toast } from 'sonner';
 import { isValidStellarAddress, isValidStellarAmount, sanitizeInput } from '@/lib/utils';
-import { initializeEscrow, xlmToStroops } from '@/lib/stellar/contract';
+import { initializeEscrow, xlmToStroops, ESCROW_CONTRACT_ID } from '@/lib/stellar/contract';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import Link from 'next/link';
 
@@ -78,14 +78,11 @@ export function CreateEscrowForm() {
         metadata: sanitizedTitle,
       });
 
-      // Generate escrow ID
-      const newEscrowId = result.success && result.result 
-        ? result.result.toString() 
-        : 'ESC-' + Date.now().toString().slice(-6);
-
-      if (result.success) {
+      if (result.success && result.transactionHash) {
+        // Use the escrow ID from contract result
+        const newEscrowId = result.result ? result.result.toString() : 'ESC-' + Date.now().toString().slice(-6);
         setEscrowId(newEscrowId);
-        
+
         // Store escrow in Zustand
         addEscrow({
           id: newEscrowId,
@@ -95,76 +92,54 @@ export function CreateEscrowForm() {
           amount: parseFloat(sanitizedAmount),
           currency: 'XLM',
           status: 'created',
-          contractAddress: result.transactionHash,
+          contractAddress: ESCROW_CONTRACT_ID,
           transactionHash: result.transactionHash,
           createdAt: new Date(),
           deadline: deadlineDate,
           metadata: sanitizedTitle,
         });
-        
+
         toast.success(
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
               <span>Escrow created successfully!</span>
             </div>
-            <p className="text-sm">Project: "{sanitizedTitle}"</p>
-            {result.transactionHash && (
-              <Link
-                href={`https://testnet.stellarchain.io/tx/${result.transactionHash}`}
-                target="_blank"
-                className="text-sm text-blue-600 hover:underline"
-              >
-                View on Explorer
-              </Link>
-            )}
+            <p className="text-sm">Project: &quot;{sanitizedTitle}&quot;</p>
+            <p className="text-xs font-mono">Escrow ID: {newEscrowId}</p>
+            <Link
+              href={`https://stellar.expert/explorer/testnet/tx/${result.transactionHash}`}
+              target="_blank"
+              className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+            >
+              View on Explorer
+            </Link>
           </div>
         );
+        
+        // Reset form
         setProjectTitle('');
         setFreelancerAddress('');
         setAmount('');
       } else {
-        // Contract not deployed - create local escrow
+        // Handle errors
         if (result.errorCode === 'CONTRACT_NOT_DEPLOYED') {
-          toast.info(
+          toast.error(
             <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 mt-0.5" />
+              <AlertCircle className="h-4 w-4 mt-0.5" />
               <div className="flex flex-col gap-1">
-                <span>Contract not deployed yet. Escrow created in demo mode.</span>
-                <span className="text-xs text-gray-600">To enable full functionality, deploy the escrow contract following the deployment guide.</span>
+                <span>Contract not deployed. Please deploy the escrow contract first.</span>
+                <Link
+                  href="/docs/deployment"
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  View deployment guide →
+                </Link>
               </div>
             </div>
           );
-          
-          // Store escrow in Zustand (demo mode)
-          addEscrow({
-            id: newEscrowId,
-            title: sanitizedTitle,
-            client: publicKey,
-            freelancer: sanitizedAddress,
-            amount: parseFloat(sanitizedAmount),
-            currency: 'XLM',
-            status: 'created',
-            createdAt: new Date(),
-            deadline: deadlineDate,
-            metadata: sanitizedTitle,
-          });
-          
-          setEscrowId(newEscrowId);
-          
-          toast.success(
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Demo Escrow created!</span>
-              </div>
-              <p className="text-sm">Project: "{sanitizedTitle}"</p>
-              <p className="text-xs text-gray-600">Escrow saved locally. Navigate to "Escrows" tab to view it.</p>
-            </div>
-          );
-          setProjectTitle('');
-          setFreelancerAddress('');
-          setAmount('');
+        } else if (result.errorCode === 'USER_CANCELLED') {
+          toast.info('Transaction cancelled');
         } else {
           toast.error(
             <div className="flex items-center gap-2">
@@ -174,8 +149,9 @@ export function CreateEscrowForm() {
           );
         }
       }
-    } catch (error: any) {
-      console.error('Escrow creation failed:', error);
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error('Escrow creation failed:', err);
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
@@ -270,10 +246,10 @@ export function CreateEscrowForm() {
               <p className="text-xs text-green-700 mt-1 font-mono">
                 Escrow ID: {escrowId}
               </p>
-              <div className="mt-2 text-xs text-green-700 space-y-1">
-                <p>• Navigate to "Escrows" tab to view your escrow</p>
-                <p>• Funds will be held securely until work is completed</p>
-              </div>
+              <p className="text-xs text-green-700 space-y-1">
+                <p>&bull; Navigate to &quot;Escrows&quot; tab to view your escrow</p>
+                <p>&bull; Funds will be held securely until work is completed</p>
+              </p>
             </div>
           </div>
         </div>

@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useWallet } from '@/store/useWallet';
-import { fundEscrow, releasePayment, refundEscrow } from '@/lib/stellar/contract';
-import { CheckCircle2, AlertCircle, Info, ExternalLink } from 'lucide-react';
+import { useEscrowStore } from '@/store/useEscrowStore';
+import { fundEscrow, releasePayment, refundEscrow, xlmToStroops } from '@/lib/stellar/contract';
+import { CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
 interface Escrow {
@@ -18,12 +19,14 @@ interface Escrow {
   amount: number;
   currency: 'XLM' | 'USDC';
   status: 'created' | 'funded' | 'released' | 'refunded';
-  contractAddress: string;
+  contractAddress?: string;
+  transactionHash?: string;
   createdAt: Date;
 }
 
 export function EscrowCard({ escrow }: { escrow: Escrow }) {
   const { publicKey, isConnected } = useWallet();
+  const { updateEscrowStatus, updateEscrowTransaction } = useEscrowStore();
   const [status, setStatus] = useState<Escrow['status']>(escrow.status);
   const [loading, setLoading] = useState(false);
   const [transactionHash, setTransactionHash] = useState<string | null>(null);
@@ -45,12 +48,22 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
     setLoading(true);
 
     try {
-      // Try contract funding first
-      const result = await fundEscrow(BigInt(1), BigInt(escrow.amount * 10_000_000));
+      // Convert amount to stroops
+      const amountInStroops = xlmToStroops(escrow.amount);
       
+      // Try contract funding first
+      // Note: In a real implementation, you'd need to attach payment to the transaction
+      // This is a simplified version - production would use invokeHostFunctionOperation
+      const result = await fundEscrow(BigInt(1), amountInStroops);
+
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);
         setStatus('funded');
+        updateEscrowStatus(escrow.id, 'funded');
+        if (result.transactionHash) {
+          updateEscrowTransaction(escrow.id, result.transactionHash);
+        }
+        
         toast.success(
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -58,7 +71,7 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
               <span>Escrow funded successfully!</span>
             </div>
             <Link
-              href={`https://testnet.stellarchain.io/tx/${result.transactionHash}`}
+              href={`https://stellar.expert/explorer/testnet/tx/${result.transactionHash}`}
               target="_blank"
               className="text-sm text-blue-600 hover:underline flex items-center gap-1"
             >
@@ -67,17 +80,9 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
           </div>
         );
       } else {
-        // Demo mode
-        if (result.errorCode === 'CONTRACT_NOT_DEPLOYED') {
-          toast.info(
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 mt-0.5" />
-              <span>Contract not deployed. Simulating funding in demo mode.</span>
-            </div>
-          );
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          setStatus('funded');
-          toast.success(`Successfully funded ${escrow.amount} ${escrow.currency} (Demo)`);
+        // Handle errors
+        if (result.errorCode === 'USER_CANCELLED') {
+          toast.info('Transaction cancelled');
         } else {
           toast.error(
             <div className="flex items-center gap-2">
@@ -87,8 +92,9 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
           );
         }
       }
-    } catch (error: any) {
-      console.error('Funding failed:', error);
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error('Funding failed:', err);
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
@@ -120,10 +126,15 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
 
     try {
       const result = await releasePayment(BigInt(1));
-      
+
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);
         setStatus('released');
+        updateEscrowStatus(escrow.id, 'released');
+        if (result.transactionHash) {
+          updateEscrowTransaction(escrow.id, result.transactionHash);
+        }
+        
         toast.success(
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -131,7 +142,7 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
               <span>Payment released successfully!</span>
             </div>
             <Link
-              href={`https://testnet.stellarchain.io/tx/${result.transactionHash}`}
+              href={`https://stellar.expert/explorer/testnet/tx/${result.transactionHash}`}
               target="_blank"
               className="text-sm text-blue-600 hover:underline flex items-center gap-1"
             >
@@ -140,11 +151,8 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
           </div>
         );
       } else {
-        if (result.errorCode === 'CONTRACT_NOT_DEPLOYED') {
-          toast.info('Contract not deployed. Simulating in demo mode.');
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          setStatus('released');
-          toast.success(`Successfully released payment to freelancer (Demo)`);
+        if (result.errorCode === 'USER_CANCELLED') {
+          toast.info('Transaction cancelled');
         } else {
           toast.error(
             <div className="flex items-center gap-2">
@@ -154,8 +162,9 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
           );
         }
       }
-    } catch (error: any) {
-      console.error('Release failed:', error);
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error('Release failed:', err);
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
@@ -182,17 +191,19 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
 
     try {
       const result = await refundEscrow(BigInt(1));
-      
+
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);
         setStatus('refunded');
+        updateEscrowStatus(escrow.id, 'refunded');
+        if (result.transactionHash) {
+          updateEscrowTransaction(escrow.id, result.transactionHash);
+        }
+        
         toast.success('Refund processed successfully!');
       } else {
-        if (result.errorCode === 'CONTRACT_NOT_DEPLOYED') {
-          toast.info('Contract not deployed. Simulating in demo mode.');
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          setStatus('refunded');
-          toast.success('Refund processed (Demo)');
+        if (result.errorCode === 'USER_CANCELLED') {
+          toast.info('Transaction cancelled');
         } else {
           toast.error(
             <div className="flex items-center gap-2">
@@ -202,8 +213,9 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
           );
         }
       }
-    } catch (error: any) {
-      console.error('Refund failed:', error);
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error('Refund failed:', err);
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
