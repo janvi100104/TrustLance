@@ -1,74 +1,62 @@
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useWallet } from '@/store/useWallet';
 import { truncateAddress } from '@/lib/utils';
-import { Loader2, AlertCircle, LayoutDashboard } from 'lucide-react';
+import { Loader2, AlertCircle, LayoutDashboard, Wallet, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { WalletSelectorModal } from './WalletSelectorModal';
+import { getWalletById } from '@/lib/stellar/wallet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function WalletButton({ variant = 'default' }: { variant?: 'default' | 'nav' }) {
-  const { publicKey, isConnected, connecting, error, connectWallet, disconnectWallet, clearError } = useWallet();
+  const [modalOpen, setModalOpen] = useState(false);
+  const { 
+    publicKey, 
+    isConnected, 
+    connecting, 
+    error, 
+    connectWallet, 
+    disconnectWallet, 
+    clearError,
+    walletId,
+    walletName 
+  } = useWallet();
 
-  const handleWalletAction = async () => {
-    // Clear any previous errors
-    clearError();
-
+  const handleWalletSelect = async (selectedWalletId: string) => {
     try {
-      if (isConnected) {
-        await disconnectWallet();
-        toast.success('Wallet disconnected');
-      } else {
-        await connectWallet();
-        toast.success('Wallet connected successfully!');
-      }
+      await connectWallet(selectedWalletId);
+      const wallet = getWalletById(selectedWalletId);
+      toast.success(`${wallet?.name || 'Wallet'} connected successfully!`);
     } catch (error: any) {
-      // Only log errors in development
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Wallet action failed:', error.message);
+      // Don't show error toast for user cancellation
+      if (error.code === 'USER_CANCELLED' || error.code === 'MODAL_CLOSED') {
+        console.log('Wallet connection cancelled by user');
+        return;
       }
+      
+      // Error is handled in the store, but we can add additional context
+      console.error('Wallet connection failed:', error);
+      toast.error(error.message || 'Failed to connect wallet');
+    }
+  };
 
-      // Handle specific error types with user-friendly messages
-      let userMessage = error.message || 'Wallet action failed';
-      let isError = true;
-
-      switch (error.code) {
-        case 'FREIGHTER_NOT_INSTALLED':
-          userMessage = 'Freighter wallet not found. Please install the Freighter browser extension.';
-          // Open installation page in a new tab
-          setTimeout(() => {
-            window.open('https://www.freighter.app/', '_blank');
-          }, 500);
-          break;
-        case 'FREIGHTER_CONNECT_FAILED':
-          userMessage = 'Failed to connect to Freighter. Please make sure the extension is installed and unlocked.';
-          break;
-        case 'FREIGHTER_NO_PUBLIC_KEY':
-          userMessage = 'Could not retrieve wallet information. Please check your Freighter settings.';
-          break;
-        case 'FREIGHTER_WRONG_NETWORK':
-          userMessage = `Wrong network! ${error.message}`;
-          break;
-        case 'FREIGHTER_GENERIC_ERROR':
-          userMessage = 'Connection failed. Please try again or check your wallet settings.';
-          break;
-        default:
-          // Check if user rejected the connection
-          if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
-            userMessage = 'Connection request was cancelled.';
-            isError = false; // Don't show as error toast
-          }
-          break;
-      }
-
-      // Show error to user using toast notifications
-      if (isError) {
-        toast.error(userMessage, {
-          description: error.code ? `Error: ${error.code}` : undefined,
-        });
-      } else {
-        toast.info(userMessage);
-      }
+  const handleDisconnect = async () => {
+    try {
+      await disconnectWallet();
+      toast.success('Wallet disconnected');
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
+      toast.error('Failed to disconnect wallet');
     }
   };
 
@@ -89,54 +77,80 @@ export function WalletButton({ variant = 'default' }: { variant?: 'default' | 'n
 
   if (isConnected && publicKey) {
     return (
-      <div className="flex items-center gap-2">
-        {variant === 'nav' ? (
-          <>
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <LayoutDashboard className="w-4 h-4" />
-                Dashboard
-              </Button>
-            </Link>
-            <span className="text-sm font-mono bg-gray-100 px-3 py-1 rounded-md" title={publicKey}>
-              {truncateAddress(publicKey)}
-            </span>
-            <Button onClick={disconnectWallet} variant="outline" size="sm">
-              Disconnect
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <Wallet className="w-3.5 h-3.5 text-white" />
+              </div>
+              <span className="text-sm font-mono" title={publicKey}>
+                {truncateAddress(publicKey)}
+              </span>
+              <ChevronDown className="w-4 h-4 opacity-50" />
             </Button>
-          </>
-        ) : (
-          <>
-            <span className="text-sm font-medium bg-green-100 text-green-800 px-3 py-1 rounded-full">
-              Connected
-            </span>
-            <span className="text-sm font-mono bg-gray-100 px-3 py-1 rounded-md" title={publicKey}>
-              {truncateAddress(publicKey)}
-            </span>
-            <Link href="/dashboard">
-              <Button variant="outline" size="sm">
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">Connected Wallet</p>
+                <p className="text-xs text-muted-foreground">
+                  {walletName || 'Wallet'}
+                </p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard" className="cursor-pointer flex items-center">
+                <LayoutDashboard className="mr-2 h-4 w-4" />
                 Dashboard
-              </Button>
-            </Link>
-            <Button onClick={disconnectWallet} variant="outline" size="sm">
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDisconnect}>
               Disconnect
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {variant === 'nav' && (
+          <Link href="/dashboard">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <LayoutDashboard className="w-4 h-4" />
+              <span className="hidden lg:inline">Dashboard</span>
             </Button>
-          </>
+          </Link>
         )}
-      </div>
+      </>
     );
   }
 
   return (
-    <Button onClick={handleWalletAction} disabled={connecting}>
-      {connecting ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Connecting...
-        </>
-      ) : (
-        'Connect Wallet'
-      )}
-    </Button>
+    <>
+      <Button 
+        onClick={() => setModalOpen(true)} 
+        disabled={connecting}
+        variant={variant === 'nav' ? 'ghost' : 'default'}
+        size="sm"
+        className="gap-2"
+      >
+        {connecting ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="hidden sm:inline">Connecting...</span>
+          </>
+        ) : (
+          <>
+            <Wallet className="h-4 w-4" />
+            <span className="hidden sm:inline">Connect Wallet</span>
+          </>
+        )}
+      </Button>
+
+      <WalletSelectorModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onWalletSelect={handleWalletSelect}
+      />
+    </>
   );
 }
