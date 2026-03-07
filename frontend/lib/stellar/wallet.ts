@@ -11,21 +11,21 @@ import { Networks } from '@stellar/stellar-sdk';
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'TESTNET';
 const networkPassphrase = NETWORK === 'PUBLIC' ? Networks.PUBLIC : Networks.TESTNET;
 
-// Initialize StellarWalletsKit as a singleton
-let kit: StellarWalletsKit | null = null;
+// Track initialization
+let isInitialized = false;
 
 /**
- * Get or initialize the StellarWalletsKit instance
+ * Initialize StellarWalletsKit if not already done
  */
-export const getKit = (): StellarWalletsKit => {
-  if (!kit) {
-    // Create new instance
-    kit = new StellarWalletsKit({
+const ensureInitialized = () => {
+  if (!isInitialized) {
+    StellarWalletsKit.init({
       modules: defaultModules(),
       network: networkPassphrase,
     });
+    isInitialized = true;
+    console.log('[Wallet] Kit initialized');
   }
-  return kit;
 };
 
 // Supported wallets configuration
@@ -96,6 +96,13 @@ export const SUPPORTED_WALLETS: WalletInfo[] = [
 ];
 
 /**
+ * Get wallet by ID
+ */
+export const getWalletById = (walletId: string): WalletInfo | undefined => {
+  return SUPPORTED_WALLETS.find(w => w.id === walletId);
+};
+
+/**
  * Connect to a specific wallet using the auth modal
  * The modal will automatically show installed wallets first
  */
@@ -107,21 +114,20 @@ export const connectWallet = async (walletId?: string): Promise<{
   try {
     console.log('[Wallet] Starting connection...', { walletId });
     
-    // Get or create kit instance
-    const kitInstance = getKit();
-    console.log('[Wallet] Kit instance:', !!kitInstance);
+    // Ensure kit is initialized
+    ensureInitialized();
 
-    // If walletId is provided, set it first
+    // If walletId is provided, set it first using static method
     if (walletId) {
       console.log('[Wallet] Setting wallet:', walletId);
-      kitInstance.setWallet(walletId);
+      StellarWalletsKit.setWallet(walletId);
     }
 
-    console.log('[Wallet] Selected module:', kitInstance.selectedModule?.productId);
+    console.log('[Wallet] Selected module:', StellarWalletsKit.selectedModule?.productId);
 
     // Show authentication modal to connect
     // This will show the wallet selection UI
-    const result = await kitInstance.authModal();
+    const result = await StellarWalletsKit.authModal();
     console.log('[Wallet] Auth result:', result);
 
     // Check if user closed the modal (result will be null/undefined)
@@ -134,7 +140,7 @@ export const connectWallet = async (walletId?: string): Promise<{
     }
 
     // Get the current wallet info from the active module
-    const currentModule = kitInstance.selectedModule;
+    const currentModule = StellarWalletsKit.selectedModule;
 
     if (!currentModule) {
       throw new Error('No wallet module selected');
@@ -183,8 +189,7 @@ export const connectWallet = async (walletId?: string): Promise<{
  */
 export const disconnectWallet = async (): Promise<void> => {
   try {
-    const kitInstance = getKit();
-    await kitInstance.disconnect();
+    await StellarWalletsKit.disconnect();
   } catch (error) {
     console.error('Error disconnecting wallet:', error);
     // Continue with local state reset even if disconnect fails
@@ -196,8 +201,7 @@ export const disconnectWallet = async (): Promise<void> => {
  */
 export const getWalletAddress = async (): Promise<string | null> => {
   try {
-    const kitInstance = getKit();
-    const result = await kitInstance.getAddress();
+    const result = await StellarWalletsKit.getAddress();
     return result.address || null;
   } catch (error) {
     console.error('Error getting wallet address:', error);
@@ -226,9 +230,8 @@ export const getCurrentWalletInfo = async (): Promise<{
   publicKey: string;
 } | null> => {
   try {
-    const kitInstance = getKit();
-    const currentModule = kitInstance.selectedModule;
-    const addressResult = await kitInstance.getAddress();
+    const currentModule = StellarWalletsKit.selectedModule;
+    const addressResult = await StellarWalletsKit.getAddress();
 
     if (!currentModule || !addressResult.address) {
       return null;
@@ -252,8 +255,7 @@ export const getCurrentWalletInfo = async (): Promise<{
  */
 export const signTransaction = async (transactionXdr: string): Promise<string> => {
   try {
-    const kitInstance = getKit();
-    const result = await kitInstance.signTransaction(transactionXdr);
+    const result = await StellarWalletsKit.signTransaction(transactionXdr);
     return result.signedTransactionXdr;
   } catch (error: any) {
     console.error('Error signing transaction:', error);
@@ -278,8 +280,7 @@ export const validateNetwork = async (): Promise<{
   const expectedNetwork = NETWORK;
 
   try {
-    const kitInstance = getKit();
-    const network = kitInstance.getNetwork();
+    const network = StellarWalletsKit.getNetwork();
 
     const networkMap: Record<string, string> = {
       [Networks.PUBLIC]: 'PUBLIC',
@@ -327,31 +328,21 @@ export const openInstallUrl = (walletId: string): void => {
 };
 
 /**
- * Get wallet by ID
- */
-export const getWalletById = (walletId: string): WalletInfo | undefined => {
-  return SUPPORTED_WALLETS.find(w => w.id === walletId);
-};
-
-/**
  * Check if a specific wallet is installed
- * We'll use a simple approach: try to set the wallet and see if it works
  */
 export const isWalletInstalled = async (walletId: string): Promise<boolean> => {
   try {
-    const kitInstance = getKit();
-
     // Save current selection
-    const previousModule = kitInstance.selectedModule;
+    const previousModule = StellarWalletsKit.selectedModule;
 
     try {
-      kitInstance.setWallet(walletId);
-      const module = kitInstance.selectedModule;
-      const isInstalled = await module.isInstalled();
+      StellarWalletsKit.setWallet(walletId);
+      const module = StellarWalletsKit.selectedModule;
+      const isInstalled = await module.isAvailable();
 
       // Restore previous selection
       if (previousModule && previousModule.productId !== walletId) {
-        kitInstance.setWallet(previousModule.productId);
+        StellarWalletsKit.setWallet(previousModule.productId);
       }
 
       return isInstalled;
