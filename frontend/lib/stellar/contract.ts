@@ -85,19 +85,32 @@ async function buildAndSubmitTransaction(
 ): Promise<{ hash: string; result?: any }> {
   try {
     console.log('[Contract] Building transaction for method:', method);
-    console.log('[Contract] Args:', args);
-    
+    // Use custom JSON stringify replacer to handle BigInt
+    console.log('[Contract] Args:', JSON.stringify(args, (key, value) =>
+      typeof value === 'bigint' ? value.toString() + 'n' : value
+    ));
+
     // Get account from network
     const account = await server.getAccount(publicKey);
     console.log('[Contract] Account fetched:', account.accountId());
 
     // Build the contract call operation
-    // SDK v14 should handle conversion, but we'll help it
-    const operation = contract.call(method, ...args);
+    // SDK v14+ handles conversion automatically, but we need to ensure BigInt is properly converted
+    // Convert BigInt args to xdr.ScVal.scvU64 to avoid serialization issues
+    const scArgs = args.map(arg => {
+      if (typeof arg === 'bigint') {
+        // Convert BigInt to scvU64 (Soroban's u64 type)
+        // This prevents JSON.stringify errors during prepareTransaction
+        return xdr.ScVal.scvU64(new xdr.Uint64(BigInt.asUintN(64, arg)));
+      }
+      return arg;
+    });
+    
+    const operation = contract.call(method, ...scArgs);
     console.log('[Contract] Operation built');
 
-    // Build transaction
-    let tx = new TransactionBuilder(account, {
+    // Build transaction without preparing first
+    const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
       networkPassphrase: NETWORK_PASSPHRASE,
       timebounds: {
@@ -108,14 +121,46 @@ async function buildAndSubmitTransaction(
       .addOperation(operation)
       .build();
 
-    console.log('[Contract] Transaction built, preparing...');
+    console.log('[Contract] Transaction built, simulating...');
 
-    // Prepare transaction (simulate and add resources)
-    tx = await server.prepareTransaction(tx);
-    console.log('[Contract] Transaction prepared');
+    // Simulate transaction first to get soroban data
+    const simulatedTx = await server.simulateTransaction(tx);
+    console.log('[Contract] Simulation complete');
+
+    // Check for simulation error
+    if ('error' in simulatedTx && simulatedTx.error) {
+      throw new Error(`Simulation failed: ${JSON.stringify(simulatedTx.error)}`);
+    }
+
+    // Extract soroban data from simulation result
+    const simResponse = simulatedTx as any;
+    if (!simResponse.results || !simResponse.results[0]) {
+      throw new Error('Simulation returned no results');
+    }
+
+    const sorobanData = simResponse.resultData?.sorobanData 
+      ? new SorobanDataBuilder(simResponse.resultData.sorobanData).build()
+      : undefined;
+
+    console.log('[Contract] Soroban data extracted, building final transaction...');
+
+    // Build final transaction with soroban data
+    const finalTx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      timebounds: {
+        minTime: 0,
+        maxTime: Math.floor(Date.now() / 1000) + 30,
+      },
+      sorobanData,
+    })
+      .addOperation(operation)
+      .build();
+
+    console.log('[Contract] Final transaction built');
 
     // Sign with Freighter
-    const signedTx = await freighter.signTransaction(tx.toXDR(), {
+    const signedTx = await freighter.signTransaction(finalTx.toXDR(), {
       networkPassphrase: NETWORK_PASSPHRASE,
     });
     console.log('[Contract] Transaction signed');
