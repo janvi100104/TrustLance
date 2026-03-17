@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useWallet } from '@/store/useWallet';
 import { useEscrowStore } from '@/store/useEscrowStore';
-import { fundEscrow, releasePayment, refundEscrow, xlmToStroops } from '@/lib/stellar/contract';
+import { fundEscrowWithPayment, releasePayment, refundEscrow, xlmToStroops } from '@/lib/stellar/contract';
 import { CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
@@ -50,11 +50,13 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
     try {
       // Convert amount to stroops
       const amountInStroops = xlmToStroops(escrow.amount);
-      
-      // Try contract funding first
-      // Note: In a real implementation, you'd need to attach payment to the transaction
-      // This is a simplified version - production would use invokeHostFunctionOperation
-      const result = await fundEscrow(BigInt(1), amountInStroops);
+
+      // Parse escrow ID - handle both string and numeric IDs
+      const escrowId = BigInt(escrow.id.replace(/\D/g, '') || '1');
+
+      // Use fundEscrowWithPayment for REAL XLM transfer
+      // This transfers XLM to contract AND calls fund() in one transaction
+      const result = await fundEscrowWithPayment(escrowId, amountInStroops);
 
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);
@@ -63,13 +65,16 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
         if (result.transactionHash) {
           updateEscrowTransaction(escrow.id, result.transactionHash);
         }
-        
+
         toast.success(
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
               <span>Escrow funded successfully!</span>
             </div>
+            <p className="text-xs text-green-700 font-medium">
+              {escrow.amount} XLM transferred to contract
+            </p>
             <Link
               href={`https://stellar.expert/explorer/testnet/tx/${result.transactionHash}`}
               target="_blank"
@@ -125,7 +130,9 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
     setLoading(true);
 
     try {
-      const result = await releasePayment(BigInt(1));
+      // Parse escrow ID - handle both string and numeric IDs
+      const escrowId = BigInt(escrow.id.replace(/\D/g, '') || '1');
+      const result = await releasePayment(escrowId);
 
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);
@@ -190,7 +197,9 @@ export function EscrowCard({ escrow }: { escrow: Escrow }) {
     setLoading(true);
 
     try {
-      const result = await refundEscrow(BigInt(1));
+      // Parse escrow ID - handle both string and numeric IDs
+      const escrowId = BigInt(escrow.id.replace(/\D/g, '') || '1');
+      const result = await refundEscrow(escrowId);
 
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);

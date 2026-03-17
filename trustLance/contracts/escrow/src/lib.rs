@@ -1,7 +1,12 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracterror, contracttype, Address, Env, String, Symbol,
+    contract, contractimpl, contracterror, contractevent, contracttype, 
+    Address, Env, String,
 };
+use soroban_sdk::token::{Client as TokenClient};
+
+// Native asset (XLM) address on Stellar - well-known address
+const NATIVE_TOKEN_ADDRESS: &str = "CAS3J75LGX5XMMJHTTN7J7XVZULZPIV75Z24S3Y6I57B324W55Y7MTZ4";
 
 // Contract types
 
@@ -32,9 +37,9 @@ pub struct Escrow {
 }
 
 // Event types using #[contractevent] macro
-#[contracttype]
+#[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EscrowCreatedEvent {
+pub struct EscrowCreated {
     pub escrow_id: u64,
     pub client: Address,
     pub freelancer: Address,
@@ -42,34 +47,41 @@ pub struct EscrowCreatedEvent {
     pub deadline: u64,
 }
 
-#[contracttype]
+#[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EscrowFundedEvent {
+pub struct EscrowFunded {
     pub escrow_id: u64,
     pub amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaymentReleasedEvent {
+pub struct PaymentReleased {
     pub escrow_id: u64,
     pub freelancer: Address,
     pub amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RefundEvent {
+pub struct Refund {
     pub escrow_id: u64,
     pub client: Address,
     pub amount: i128,
 }
 
-#[contracttype]
+#[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DisputeEvent {
+pub struct Dispute {
     pub escrow_id: u64,
     pub reason: String,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RevisionRequested {
+    pub escrow_id: u64,
+    pub note: String,
 }
 
 // Error types
@@ -89,12 +101,11 @@ pub enum EscrowError {
     Overflow = 10,
 }
 
-// Storage keys
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum StorageKey {
-    EscrowCount,
-    Escrow(u64),
+// Storage keys - use simple u32 keys instead of enum
+const ESCROW_COUNT_KEY: u32 = 0;
+fn escrow_key(id: u64) -> u32 {
+    // Simple hash: base + (id % 1000)
+    100 + (id % 1000) as u32
 }
 
 // Contract implementation
@@ -108,25 +119,17 @@ impl EscrowContract {
     /// Returns the escrow ID
     pub fn initialize(
         env: Env,
+        client: Address,
         freelancer: Address,
         amount: i128,
         deadline: u64,
         metadata: String,
-    ) -> Result<u64, EscrowError> {
-        // Validate inputs
-        if amount <= 0 {
-            return Err(EscrowError::InvalidAmount);
-        }
-
-        if deadline <= env.ledger().timestamp() {
-            return Err(EscrowError::InvalidDeadline);
-        }
-
-        // Get current escrow count and increment
+    ) -> u64 {
+        // Get current escrow count
         let escrow_count: u64 = env
             .storage()
             .instance()
-            .get(&StorageKey::EscrowCount)
+            .get(&ESCROW_COUNT_KEY)
             .unwrap_or(0);
 
         let new_id = escrow_count + 1;
@@ -134,7 +137,7 @@ impl EscrowContract {
         // Create escrow
         let escrow = Escrow {
             id: new_id,
-            client: env.current_contract_address(),
+            client: client.clone(),
             freelancer: freelancer.clone(),
             amount,
             token: None, // Native XLM
@@ -147,33 +150,22 @@ impl EscrowContract {
         // Store escrow
         env.storage()
             .instance()
-            .set(&StorageKey::Escrow(new_id), &escrow);
+            .set(&escrow_key(new_id), &escrow);
 
         // Update escrow count
-        env.storage().instance().set(&StorageKey::EscrowCount, &new_id);
+        env.storage().instance().set(&ESCROW_COUNT_KEY, &new_id);
 
-        // Emit event (using tuple syntax for Soroban SDK v25)
-        env.events().publish(
-            (Symbol::new(&env, "escrow_created"),),
-            EscrowCreatedEvent {
-                escrow_id: new_id,
-                client: env.current_contract_address(),
-                freelancer: freelancer.clone(),
-                amount,
-                deadline,
-            },
-        );
-
-        Ok(new_id)
+        new_id
     }
 
     /// Fund the escrow with native XLM
-    /// Must be called by the client with attached payment
+    /// Client must transfer tokens to contract BEFORE calling this function
+    /// The transfer is done via Payment operation in the same transaction
     pub fn fund(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
         let mut escrow: Escrow = env
             .storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)?;
 
         // Verify caller is the client
@@ -185,33 +177,46 @@ impl EscrowContract {
             return Err(EscrowError::EscrowAlreadyFunded);
         }
 
+        // Verify contract has received funds by checking balance
+        // For native XLM, we check the contract's balance
+        let contract_address = env.current_contract_address();
+        
+        // Get native token (XLM) contract using well-known address
+        let native_token_address = Address::from_str(&env, NATIVE_TOKEN_ADDRESS);
+        let token_client = TokenClient::new(&env, &native_token_address);
+        
+        // Check contract balance (optional verification)
+        let contract_balance = token_client.balance(&contract_address);
+        
+        // Verify balance is at least the escrow amount
+        if contract_balance < escrow.amount {
+            return Err(EscrowError::InvalidAmount);
+        }
+
         // Update status
         escrow.status = EscrowStatus::Funded;
 
         // Store updated escrow
         env.storage()
             .instance()
-            .set(&StorageKey::Escrow(escrow_id), &escrow);
+            .set(&escrow_key(escrow_id), &escrow);
 
         // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "escrow_funded"),),
-            EscrowFundedEvent {
-                escrow_id,
-                amount: escrow.amount,
-            },
-        );
+        EscrowFunded {
+            escrow_id,
+            amount: escrow.amount,
+        }.publish(&env);
 
         Ok(())
     }
 
-    /// Release payment to freelancer
+    /// Release payment to freelancer (WITH REAL XLM TRANSFER)
     /// Can only be called by the client when status is Funded
     pub fn release_payment(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
         let mut escrow: Escrow = env
             .storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)?;
 
         // Verify caller is the client
@@ -223,32 +228,30 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotFunded);
         }
 
-        // Update status
+        // Update status BEFORE transfer (in case transfer fails)
         escrow.status = EscrowStatus::Released;
 
-        // Store updated escrow before transfer
+        // Store updated escrow
         env.storage()
             .instance()
-            .set(&StorageKey::Escrow(escrow_id), &escrow);
+            .set(&escrow_key(escrow_id), &escrow);
 
-        // Transfer payment to freelancer using native token transfer
-        // The contract must receive the tokens first, then transfer them
-        // For this simplified version, we assume the contract holds the balance
-        let _contract_address = env.current_contract_address();
+        // REAL XLM TRANSFER to freelancer
+        let contract_address = env.current_contract_address();
         
-        // Use the native token (XLM) transfer
-        // Note: In production, you'd use the token client to transfer
-        // This is a simplified version that assumes balance tracking
+        // Get native token (XLM) contract using well-known address
+        let native_token_address = Address::from_str(&env, NATIVE_TOKEN_ADDRESS);
+        let token_client = TokenClient::new(&env, &native_token_address);
         
+        // Transfer escrow amount to freelancer
+        token_client.transfer(&contract_address, &escrow.freelancer, &escrow.amount);
+
         // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "payment_released"),),
-            PaymentReleasedEvent {
-                escrow_id,
-                freelancer: escrow.freelancer.clone(),
-                amount: escrow.amount,
-            },
-        );
+        PaymentReleased {
+            escrow_id,
+            freelancer: escrow.freelancer.clone(),
+            amount: escrow.amount,
+        }.publish(&env);
 
         Ok(())
     }
@@ -258,7 +261,7 @@ impl EscrowContract {
         let escrow: Escrow = env
             .storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)?;
 
         // Verify caller is the client
@@ -270,20 +273,20 @@ impl EscrowContract {
         }
 
         // Emit event (revision request is informational)
-        env.events().publish(
-            (Symbol::new(&env, "revision_requested"),),
-            (escrow_id, note),
-        );
+        RevisionRequested {
+            escrow_id,
+            note: note.clone(),
+        }.publish(&env);
 
         Ok(())
     }
 
-    /// Refund the client after deadline has passed
+    /// Refund the client after deadline has passed (WITH REAL XLM TRANSFER)
     pub fn refund(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
         let mut escrow: Escrow = env
             .storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)?;
 
         // Check if deadline has passed
@@ -296,23 +299,30 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotFunded);
         }
 
-        // Update status
+        // Update status BEFORE transfer
         escrow.status = EscrowStatus::Refunded;
 
         // Store updated escrow
         env.storage()
             .instance()
-            .set(&StorageKey::Escrow(escrow_id), &escrow);
+            .set(&escrow_key(escrow_id), &escrow);
+
+        // REAL XLM TRANSFER back to client
+        let contract_address = env.current_contract_address();
+        
+        // Get native token (XLM) contract using well-known address
+        let native_token_address = Address::from_str(&env, NATIVE_TOKEN_ADDRESS);
+        let token_client = TokenClient::new(&env, &native_token_address);
+        
+        // Transfer escrow amount back to client
+        token_client.transfer(&contract_address, &escrow.client, &escrow.amount);
 
         // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "refund"),),
-            RefundEvent {
-                escrow_id,
-                client: escrow.client.clone(),
-                amount: escrow.amount,
-            },
-        );
+        Refund {
+            escrow_id,
+            client: escrow.client.clone(),
+            amount: escrow.amount,
+        }.publish(&env);
 
         Ok(())
     }
@@ -322,7 +332,7 @@ impl EscrowContract {
         let escrow: Escrow = env
             .storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)?;
 
         // Either client or freelancer can raise dispute
@@ -337,13 +347,10 @@ impl EscrowContract {
         }
 
         // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "dispute"),),
-            DisputeEvent {
-                escrow_id,
-                reason,
-            },
-        );
+        Dispute {
+            escrow_id,
+            reason: reason.clone(),
+        }.publish(&env);
 
         Ok(())
     }
@@ -352,7 +359,7 @@ impl EscrowContract {
     pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, EscrowError> {
         env.storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)
     }
 
@@ -361,7 +368,7 @@ impl EscrowContract {
         let escrow: Escrow = env
             .storage()
             .instance()
-            .get(&StorageKey::Escrow(escrow_id))
+            .get(&escrow_key(escrow_id))
             .ok_or(EscrowError::EscrowNotFound)?;
         Ok(escrow.status)
     }
@@ -370,7 +377,7 @@ impl EscrowContract {
     pub fn get_escrow_count(env: Env) -> u64 {
         env.storage()
             .instance()
-            .get(&StorageKey::EscrowCount)
+            .get(&ESCROW_COUNT_KEY)
             .unwrap_or(0)
     }
 }
