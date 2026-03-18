@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,8 +11,14 @@ import { isValidStellarAddress, isValidStellarAmount, sanitizeInput } from '@/li
 import { initializeEscrow, xlmToStroops, ESCROW_CONTRACT_ID } from '@/lib/stellar/contract';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import Link from 'next/link';
+import type { CreateEscrowDraft, EscrowCreatedPayload } from '@/types/dashboard';
 
-export function CreateEscrowForm() {
+interface CreateEscrowFormProps {
+  onDraftChange?: (draft: CreateEscrowDraft) => void;
+  onEscrowCreated?: (payload: EscrowCreatedPayload) => void;
+}
+
+export function CreateEscrowForm({ onDraftChange, onEscrowCreated }: CreateEscrowFormProps = {}) {
   const { publicKey, isConnected } = useWallet();
   const { addEscrow } = useEscrowStore();
   const [projectTitle, setProjectTitle] = useState('');
@@ -21,6 +27,15 @@ export function CreateEscrowForm() {
   const [deadline, setDeadline] = useState('7'); // Default 7 days
   const [loading, setLoading] = useState(false);
   const [escrowId, setEscrowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    onDraftChange?.({
+      projectTitle,
+      freelancerAddress,
+      amount,
+      deadlineDays: Number.parseInt(deadline, 10) || 0
+    });
+  }, [amount, deadline, freelancerAddress, onDraftChange, projectTitle]);
 
   const createEscrow = async () => {
     if (!isConnected || !publicKey) {
@@ -116,6 +131,15 @@ export function CreateEscrowForm() {
             </Link>
           </div>
         );
+
+        onEscrowCreated?.({
+          id: newEscrowId,
+          title: sanitizedTitle,
+          freelancer: sanitizedAddress,
+          amount: parseFloat(sanitizedAmount),
+          deadlineDays,
+          transactionHash: result.transactionHash
+        });
         
         // Reset form
         setProjectTitle('');
@@ -246,10 +270,10 @@ export function CreateEscrowForm() {
               <p className="text-xs text-green-700 mt-1 font-mono">
                 Escrow ID: {escrowId}
               </p>
-              <p className="text-xs text-green-700 space-y-1">
-                <p>&bull; Navigate to &quot;Escrows&quot; tab to view your escrow</p>
-                <p>&bull; Funds will be held securely until work is completed</p>
-              </p>
+              <ul className="mt-2 list-disc pl-4 text-xs text-green-700">
+                <li>Navigate to Escrow Contracts to view your escrow.</li>
+                <li>Funds will be held securely until work is completed.</li>
+              </ul>
             </div>
           </div>
         </div>

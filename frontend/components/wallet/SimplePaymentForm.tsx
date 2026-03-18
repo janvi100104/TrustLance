@@ -6,12 +6,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useWallet } from '@/store/useWallet';
 import { toast } from 'sonner';
-import { isValidStellarAddress, isValidStellarAmount, sanitizeInput } from '@/lib/utils';
-import { createAndSubmitPayment, getAccountBalance } from '@/lib/stellar/transactions';
+import { isValidStellarAddress, isValidStellarAmount, sanitizeInput, cn } from '@/lib/utils';
+import { createAndSubmitPayment } from '@/lib/stellar/transactions';
 import { ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import type { PaymentTransferInput } from '@/types/dashboard';
 
-export function SimplePaymentForm() {
+interface SimplePaymentFormProps {
+  onSuccess?: (transfer: PaymentTransferInput) => void;
+  className?: string;
+}
+
+export function SimplePaymentForm({ onSuccess, className }: SimplePaymentFormProps = {}) {
   const { publicKey, isConnected, fetchBalance } = useWallet();
   const [recipientAddress, setRecipientAddress] = useState('');
   const [amount, setAmount] = useState('');
@@ -62,9 +68,20 @@ export function SimplePaymentForm() {
 
       if (result.success && result.transactionHash) {
         setTransactionHash(result.transactionHash);
-        
+
         // Refresh balance after successful transaction
         await fetchBalance();
+
+        const transferPayload: PaymentTransferInput = {
+          from: publicKey,
+          to: sanitizedAddress,
+          amount: parseFloat(sanitizedAmount),
+          currency: 'XLM',
+          status: 'success',
+          transactionHash: result.transactionHash,
+          createdAt: new Date()
+        };
+        onSuccess?.(transferPayload);
         
         toast.success(
           <div className="flex flex-col gap-2">
@@ -117,12 +134,13 @@ export function SimplePaymentForm() {
           </div>
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Payment failed';
       console.error('Payment failed:', error);
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
-          <span>{error.message || 'Payment failed'}</span>
+          <span>{message}</span>
         </div>
       );
     } finally {
@@ -131,7 +149,7 @@ export function SimplePaymentForm() {
   };
 
   return (
-    <div className="w-full max-w-md space-y-4">
+    <div className={cn('w-full max-w-md space-y-4', className)}>
       <div className="space-y-2">
         <Label htmlFor="recipient">Recipient Address</Label>
         <Input
