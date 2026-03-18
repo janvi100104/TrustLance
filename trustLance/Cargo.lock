@@ -593,13 +593,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escrow-minimal"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "ethnum"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -713,13 +706,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hello-world"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
-]
 
 [[package]]
 name = "hex"
@@ -1556,13 +1542,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "test-simple"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
 ]
 
 [[package]]
