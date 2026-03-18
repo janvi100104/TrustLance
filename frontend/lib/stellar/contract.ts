@@ -10,6 +10,8 @@ import {
   Contract,
   StrKey,
   Address,
+  Asset,
+  nativeToScVal,
   TransactionBuilder,
   Transaction,
   BASE_FEE,
@@ -77,6 +79,20 @@ export function getEscrowContract(contractId?: string): Contract {
 }
 
 /**
+ * Convert numeric contract IDs to explicit Soroban u64 ScVal.
+ */
+function toU64ScVal(value: bigint | number | string): xdr.ScVal {
+  return nativeToScVal(value, { type: 'u64' });
+}
+
+/**
+ * Convert amounts to explicit Soroban i128 ScVal.
+ */
+function toI128ScVal(value: bigint | number | string): xdr.ScVal {
+  return nativeToScVal(value, { type: 'i128' });
+}
+
+/**
  * Helper to build and submit Soroban transaction using SDK v14+ patterns
  */
 async function buildAndSubmitTransaction(
@@ -96,9 +112,8 @@ async function buildAndSubmitTransaction(
     const account = await server.getAccount(publicKey);
     console.log('[Contract] Account fetched:', account.accountId());
 
-    // Use contract.call() with raw values
-    // SDK should handle string->Address, BigInt->ScVal conversion
-    const operation = contract.call(method, ...args);
+    // Contract.call() expects xdr.ScVal args; normalize native values.
+    const operation = contract.call(method, ...args.map(arg => nativeToScVal(arg)));
 
     console.log('[Contract] Operation built');
 
@@ -271,8 +286,8 @@ export async function initializeEscrow(
       [
         new Address(publicKey),
         new Address(freelancerAddress),
-        amount, // i128
-        BigInt(deadline), // u64 as BigInt
+        toI128ScVal(amount),
+        toU64ScVal(deadline),
         metadata, // String
       ],
       publicKey
@@ -358,7 +373,7 @@ export async function fundEscrowWithPayment(
     console.log('[Contract] Contract ID:', ESCROW_CONTRACT_ID);
 
     // Step 1: Build the fund operation
-    const fundOp = contract.call('fund', escrowId);
+    const fundOp = contract.call('fund', toU64ScVal(escrowId));
 
     // Step 2: Build payment operation (transfer XLM to contract)
     // Validate contract ID first
@@ -369,7 +384,7 @@ export async function fundEscrowWithPayment(
     // For native XLM, we use Operation.payment()
     const paymentOp = Operation.payment({
       destination: ESCROW_CONTRACT_ID,
-      asset: 'native',
+      asset: Asset.native(),
       amount: amount.toString(),
     });
 
@@ -508,7 +523,7 @@ export async function releasePayment(escrowId: bigint): Promise<ContractCallResu
     const txResult = await buildAndSubmitTransaction(
       contract,
       'release_payment',
-      [escrowId],
+      [toU64ScVal(escrowId)],
       publicKey
     );
 
@@ -570,7 +585,7 @@ export async function requestRevision(
     const txResult = await buildAndSubmitTransaction(
       contract,
       'request_revision',
-      [escrowId, note],
+      [toU64ScVal(escrowId), note],
       publicKey
     );
 
@@ -628,7 +643,7 @@ export async function refundEscrow(escrowId: bigint): Promise<ContractCallResult
     const txResult = await buildAndSubmitTransaction(
       contract,
       'refund',
-      [escrowId],
+      [toU64ScVal(escrowId)],
       publicKey
     );
 
@@ -679,7 +694,7 @@ export async function getEscrowDetails(escrowId: bigint): Promise<EscrowData | n
         networkPassphrase: NETWORK_PASSPHRASE,
       }
     )
-      .addOperation(contract.call('get_escrow', escrowId))
+      .addOperation(contract.call('get_escrow', toU64ScVal(escrowId)))
       .setTimeout(30)
       .build();
 
@@ -705,15 +720,14 @@ export async function getEscrowDetails(escrowId: bigint): Promise<EscrowData | n
 
       // Convert to EscrowData interface
       return {
-        id: parsedEscrow.id.toString(),
+        id: parsedEscrow.id,
         client: parsedEscrow.client,
         freelancer: parsedEscrow.freelancer,
-        amount: Number(parsedEscrow.amount) / 10_000_000, // Convert stroops to XLM
-        currency: 'XLM' as const,
-        token: null,
-        status: parsedEscrow.status.toLowerCase() as any,
-        deadline: new Date(Number(parsedEscrow.deadline) * 1000),
-        created_at: new Date(Number(parsedEscrow.created_at) * 1000),
+        amount: parsedEscrow.amount,
+        token: parsedEscrow.token,
+        status: parsedEscrow.status,
+        deadline: parsedEscrow.deadline,
+        created_at: parsedEscrow.created_at,
         metadata: parsedEscrow.metadata,
       };
     }
@@ -750,7 +764,7 @@ export async function getEscrowStatus(
         networkPassphrase: NETWORK_PASSPHRASE,
       }
     )
-      .addOperation(contract.call('get_status', escrowId))
+      .addOperation(contract.call('get_status', toU64ScVal(escrowId)))
       .setTimeout(30)
       .build();
 

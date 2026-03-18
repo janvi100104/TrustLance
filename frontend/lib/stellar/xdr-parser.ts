@@ -60,11 +60,10 @@ export function parseEscrowFromScVal(scVal: xdr.ScVal): ParsedEscrow {
  * 3 = Refunded
  * 4 = Disputed
  */
-export function parseEscrowStatus(scVal: xdr.ScVal): ParsedEscrow['status'] {
+export function parseEscrowStatus(
+  value: xdr.ScVal | number | bigint | string | undefined | null
+): ParsedEscrow['status'] {
   try {
-    // Status is a ScSpecU32Val or similar
-    const statusVal = scVal.value();
-    
     // Map numeric status to enum
     const statusMap: Record<number, ParsedEscrow['status']> = {
       0: 'Created',
@@ -73,7 +72,19 @@ export function parseEscrowStatus(scVal: xdr.ScVal): ParsedEscrow['status'] {
       3: 'Refunded',
       4: 'Disputed',
     };
-    
+
+    let statusVal = 0;
+    if (value instanceof xdr.ScVal) {
+      const nativeValue = scValToNative(value);
+      statusVal = Number(parseBigInt(nativeValue));
+    } else if (typeof value === 'bigint') {
+      statusVal = Number(value);
+    } else if (typeof value === 'number') {
+      statusVal = value;
+    } else if (typeof value === 'string') {
+      statusVal = Number(value.replace(/n$/, ''));
+    }
+
     const status = statusMap[statusVal] || 'Created';
     console.log('[XDR Parser] Parsed status:', status, 'from value:', statusVal);
     return status;
@@ -88,17 +99,36 @@ export function parseEscrowStatus(scVal: xdr.ScVal): ParsedEscrow['status'] {
  * 
  * Addresses in Soroban are represented as ScAddress
  */
-export function parseAddress(scVal: xdr.ScVal): string {
+export function parseAddress(value: unknown): string {
   try {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (value === undefined || value === null) {
+      return '';
+    }
+
+    if (value instanceof Address) {
+      return value.toString();
+    }
+
+    if (!(value instanceof xdr.ScVal)) {
+      if (typeof (value as any)?.toString === 'function') {
+        return (value as any).toString();
+      }
+      return '';
+    }
+
     // Check if it's already a string (some SDK versions convert automatically)
-    const nativeValue = scValToNative(scVal);
+    const nativeValue = scValToNative(value);
     if (typeof nativeValue === 'string' && nativeValue.startsWith('G')) {
       return nativeValue;
     }
     
     // Address is ScAddress - try to extract it
-    if (scVal.switch().name === 'scAddress') {
-      const address = Address.fromScAddress(scVal.address());
+    if (value.switch().name === 'scvAddress') {
+      const address = Address.fromScAddress(value.address());
       return address.toString();
     }
     

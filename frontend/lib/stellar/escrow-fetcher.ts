@@ -5,7 +5,7 @@
  * and reconstruct user's escrow history from the blockchain.
  */
 
-import { rpc, Networks } from '@stellar/stellar-sdk';
+import { rpc, Networks, scValToNative } from '@stellar/stellar-sdk';
 import { parseAddress, parseBigInt } from './xdr-parser';
 
 const SOROBAN_RPC_URL = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
@@ -65,11 +65,11 @@ export async function fetchEscrowEvents(
     // Parse events
     const events: EscrowEvent[] = response.events.map(event => {
       // Extract event type from topic
-      const topic = event.event.body.v0?.topic?.[0];
+      const topic = event.topic?.[0];
       let eventType: EscrowEvent['eventType'] = 'EscrowCreated';
       
       if (topic) {
-        const topicStr = topic.toString();
+        const topicStr = String(scValToNative(topic));
         if (topicStr.includes('EscrowCreated')) eventType = 'EscrowCreated';
         else if (topicStr.includes('EscrowFunded')) eventType = 'EscrowFunded';
         else if (topicStr.includes('PaymentReleased')) eventType = 'PaymentReleased';
@@ -78,16 +78,22 @@ export async function fetchEscrowEvents(
         else if (topicStr.includes('RevisionRequested')) eventType = 'RevisionRequested';
       }
 
+      const eventData = scValToNative(event.value) as any;
+
       // Extract escrow ID from event data
-      const escrowId = parseBigInt(event.event.body.v0?.data?.escrow_id);
+      const escrowId = parseBigInt(
+        eventData?.escrow_id ??
+        eventData?.escrowId ??
+        eventData?.id
+      );
       
       return {
         escrowId,
         eventType,
         ledger: event.ledger,
-        ledgerTimestamp: event.event.ledgerTimestamp,
+        ledgerTimestamp: event.ledgerClosedAt,
         transactionHash: event.txHash,
-        data: event.event.body.v0?.data,
+        data: eventData,
       };
     });
 
@@ -147,7 +153,7 @@ export async function getEscrowsByUser(
           client,
           freelancer,
           amount,
-          createdAt: parseInt(event.ledgerTimestamp),
+          createdAt: Math.floor(new Date(event.ledgerTimestamp).getTime() / 1000),
         });
       }
     } else if (event.eventType === 'EscrowFunded') {
@@ -230,7 +236,7 @@ export async function getEscrowById(
     client: parseAddress(createEvent.data?.client),
     freelancer: parseAddress(createEvent.data?.freelancer),
     amount: parseBigInt(createEvent.data?.amount),
-    createdAt: parseInt(createEvent.ledgerTimestamp),
+    createdAt: Math.floor(new Date(createEvent.ledgerTimestamp).getTime() / 1000),
   };
 }
 
