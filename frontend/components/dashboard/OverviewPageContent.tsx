@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Inbox, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { getStatusColor } from './dashboard-utils';
 
 export function OverviewPageContent() {
-  const { userEscrows, stats, performanceSegments, donut } = useDashboardData();
+  const { userEscrows, stats, pipelineStats, performanceSegments, donut, monthlyPaymentSeries } = useDashboardData();
   const [selectedEscrow, setSelectedEscrow] = useState<{
     id: string;
     title: string;
@@ -23,8 +23,30 @@ export function OverviewPageContent() {
     createdAt: string;
   } | null>(null);
   const recentTransactions = userEscrows.slice(0, 7);
-  const totalReturn = (stats.totalValue * 0.18 + stats.completed * 3.5).toFixed(2);
-  const revenueBars = [58, 82, 45, 76, 64, 88];
+  const maxRevenueBar = useMemo(
+    () => monthlyPaymentSeries.reduce((max, item) => Math.max(max, item.received, item.sent), 0),
+    [monthlyPaymentSeries]
+  );
+  const hasRevenueData = maxRevenueBar > 0;
+  const lifecycleTotal = userEscrows.length;
+  const lifecycleRows = [
+    {
+      label: 'Created / Disputed',
+      count: pipelineStats.created + pipelineStats.disputed,
+      color: 'bg-[#93c95f]'
+    },
+    {
+      label: 'Funded',
+      count: pipelineStats.funded,
+      color: 'bg-[#7eb14e]'
+    },
+    {
+      label: 'Completed',
+      count: pipelineStats.released + pipelineStats.refunded,
+      color: 'bg-[#4f8f33]'
+    }
+  ];
+  const formatWeeklyChange = (value: number) => (value >= 0 ? `+${value}%` : `${value}%`);
 
   return (
     <>
@@ -33,31 +55,37 @@ export function OverviewPageContent() {
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="border-[#113722] bg-gradient-to-br from-[#0f4a2a] to-[#1f6a3f] text-white">
               <CardHeader className="pb-2">
-                <CardDescription className="text-emerald-100">Update</CardDescription>
-                <CardTitle className="text-xl">{stats.weeklyChange}%</CardTitle>
+                <CardDescription className="text-emerald-100">Escrows Created (7d)</CardDescription>
+                <CardTitle className="text-xl">{stats.weeklyEscrowCurrent}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-emerald-100">Revenue increased this week</p>
+                <p className="text-sm text-emerald-100">
+                  {stats.weeklyEscrowChangePct === null
+                    ? `Previous 7d: ${stats.weeklyEscrowPrevious}`
+                    : `${formatWeeklyChange(stats.weeklyEscrowChangePct)} vs previous 7d (${stats.weeklyEscrowPrevious})`}
+                </p>
               </CardContent>
             </Card>
 
             <Card className="border-[#d8e0da] bg-white">
               <CardHeader className="pb-2">
-                <CardDescription>Net Income</CardDescription>
-                <CardTitle className="text-4xl text-[#11291f]">{stats.totalValue.toFixed(2)}</CardTitle>
+                <CardDescription>Wallet Balance</CardDescription>
+                <CardTitle className="text-4xl text-[#11291f]">{stats.totalValue.toFixed(2)} XLM</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-emerald-700">+{Math.max(6, stats.completionRate)}% from last month</p>
+                <p className="text-xs text-emerald-700">{stats.completionRate}% escrow completion rate</p>
               </CardContent>
             </Card>
 
             <Card className="border-[#d8e0da] bg-white">
               <CardHeader className="pb-2">
-                <CardDescription>Total Return</CardDescription>
-                <CardTitle className="text-4xl text-[#11291f]">{totalReturn}</CardTitle>
+                <CardDescription>Net Payment Flow</CardDescription>
+                <CardTitle className="text-4xl text-[#11291f]">{stats.netFlow.toFixed(2)} XLM</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-[#6d8478]">{stats.pending} pending payment(s)</p>
+                <p className="text-xs text-[#6d8478]">
+                  Received {stats.receivedVolume.toFixed(2)} / Sent {stats.sentVolume.toFixed(2)} XLM
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -119,56 +147,66 @@ export function OverviewPageContent() {
 
             <Card className="border-[#d8e0da] bg-white">
               <CardHeader>
-                <CardTitle className="text-[#10281d]">Revenue</CardTitle>
-                <CardDescription>Income vs expense trend</CardDescription>
+                <CardTitle className="text-[#10281d]">Payment Flow (6M)</CardTitle>
+                <CardDescription>Received vs sent XLM across the last six months</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="mb-4 text-3xl font-bold text-[#11291f]">{stats.totalValue.toFixed(2)} XLM</p>
-                <div className="flex h-36 items-end gap-3">
-                  {revenueBars.map((value, index) => (
-                    <div key={`${value}-${index}`} className="flex flex-1 items-end gap-1">
-                      <div className="w-1/2 rounded-t-md bg-[#1f6a3f]" style={{ height: `${value}%` }} />
-                      <div className="w-1/2 rounded-t-md bg-[#b5d651]" style={{ height: `${Math.max(26, value - 20)}%` }} />
+                {hasRevenueData ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-[#4f675b]">
+                      Received {monthlyPaymentSeries.reduce((sum, row) => sum + row.received, 0).toFixed(2)} XLM
+                      {' · '}
+                      Sent {monthlyPaymentSeries.reduce((sum, row) => sum + row.sent, 0).toFixed(2)} XLM
+                    </p>
+                    <div className="flex h-40 items-end gap-2">
+                      {monthlyPaymentSeries.map((month) => (
+                        <div key={month.key} className="flex flex-1 flex-col items-center gap-1">
+                          <div className="flex h-32 w-full items-end gap-1">
+                            <div
+                              className="w-1/2 rounded-t-md bg-[#1f6a3f]"
+                              style={{ height: `${(month.received / maxRevenueBar) * 100}%` }}
+                              title={`${month.label} received: ${month.received.toFixed(2)} XLM`}
+                            />
+                            <div
+                              className="w-1/2 rounded-t-md bg-[#b5d651]"
+                              style={{ height: `${(month.sent / maxRevenueBar) * 100}%` }}
+                              title={`${month.label} sent: ${month.sent.toFixed(2)} XLM`}
+                            />
+                          </div>
+                          <p className="text-[10px] uppercase tracking-wide text-[#6f8779]">{month.label}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#c9d5cc] p-6 text-center">
+                    <p className="text-sm text-[#355547]">No successful payment transfers yet.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
           <Card className="border-[#d8e0da] bg-white">
             <CardHeader>
-              <CardTitle className="text-[#10281d]">Sales Report</CardTitle>
-              <CardDescription>Progress from created to released contracts</CardDescription>
+              <CardTitle className="text-[#10281d]">Escrow Lifecycle Distribution</CardTitle>
+              <CardDescription>Current contract distribution by lifecycle status</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-[#4f675b]">Product launched</span>
-                  <span className="font-medium text-[#183124]">{stats.active + stats.completed}</span>
+              {lifecycleRows.map((row) => (
+                <div key={row.label}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="text-[#4f675b]">{row.label}</span>
+                    <span className="font-medium text-[#183124]">{row.count}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[#e7efe9]">
+                    <div
+                      className={`h-2 rounded-full ${row.color}`}
+                      style={{ width: `${lifecycleTotal > 0 ? (row.count / lifecycleTotal) * 100 : 0}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 rounded-full bg-[#e7efe9]">
-                  <div className="h-2 rounded-full bg-[#93c95f]" style={{ width: `${Math.max(18, stats.active * 14)}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-[#4f675b]">Ongoing product</span>
-                  <span className="font-medium text-[#183124]">{stats.pending}</span>
-                </div>
-                <div className="h-2 rounded-full bg-[#e7efe9]">
-                  <div className="h-2 rounded-full bg-[#7eb14e]" style={{ width: `${Math.max(12, stats.pending * 18)}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-[#4f675b]">Product sold</span>
-                  <span className="font-medium text-[#183124]">{stats.completed}</span>
-                </div>
-                <div className="h-2 rounded-full bg-[#e7efe9]">
-                  <div className="h-2 rounded-full bg-[#4f8f33]" style={{ width: `${Math.max(10, stats.completed * 18)}%` }} />
-                </div>
-              </div>
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -182,13 +220,13 @@ export function OverviewPageContent() {
               <div className="mx-auto flex h-44 w-44 items-center justify-center rounded-full" style={{ background: donut }}>
                 <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white text-center">
                   <p className="text-xs text-[#5e7868]">Total Count</p>
-                  <p className="text-2xl font-bold text-[#122d21]">{Math.max(1, userEscrows.length)}</p>
+                  <p className="text-2xl font-bold text-[#122d21]">{userEscrows.length}</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
                 {performanceSegments.map((segment) => (
                   <div key={segment.label} className="rounded-md border border-[#dbe4dd] p-2 text-center">
-                    <p className="font-semibold" style={{ color: segment.color }}>{segment.value}%</p>
+                    <p className="font-semibold" style={{ color: segment.color }}>{segment.value.toFixed(1)}%</p>
                     <p className="text-[#58705f]">{segment.label}</p>
                   </div>
                 ))}
@@ -198,13 +236,14 @@ export function OverviewPageContent() {
 
           <Card className="border-[#d8e0da] bg-white">
             <CardHeader>
-              <CardTitle className="text-[#10281d]">Guide Views</CardTitle>
-              <CardDescription>Improve your score with complete escrow lifecycles.</CardDescription>
+              <CardTitle className="text-[#10281d]">Performance Snapshot</CardTitle>
+              <CardDescription>Direct metrics from your current dashboard records.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-xs text-[#4d6559]">
-              <div className="rounded-md bg-[#f4f8f5] p-2">View Count: {Math.max(1, userEscrows.length) * 12}</div>
-              <div className="rounded-md bg-[#f4f8f5] p-2">Percentage: {stats.completionRate}%</div>
-              <div className="rounded-md bg-[#f4f8f5] p-2">Sales: {stats.completed}</div>
+              <div className="rounded-md bg-[#f4f8f5] p-2">Contracts: {userEscrows.length}</div>
+              <div className="rounded-md bg-[#f4f8f5] p-2">Completion Rate: {stats.completionRate}%</div>
+              <div className="rounded-md bg-[#f4f8f5] p-2">Avg Escrow Amount: {stats.avgEscrowAmount.toFixed(2)} XLM</div>
+              <div className="rounded-md bg-[#f4f8f5] p-2">Escrow Volume: {stats.totalEscrowVolume.toFixed(2)} XLM</div>
             </CardContent>
           </Card>
 

@@ -40,6 +40,46 @@ export function useDashboardData() {
     [userEscrows]
   );
 
+  const weeklyEscrowActivity = useMemo(() => {
+    const anchor = userEscrows.reduce((max, escrow) => {
+      const createdAt = new Date(escrow.createdAt).getTime();
+      return Number.isFinite(createdAt) && createdAt > max ? createdAt : max;
+    }, 0);
+
+    if (anchor <= 0) {
+      return {
+        currentWindow: 0,
+        previousWindow: 0,
+        percentChange: null
+      };
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const currentStart = anchor - 7 * dayMs;
+    const previousStart = anchor - 14 * dayMs;
+
+    let currentWindow = 0;
+    let previousWindow = 0;
+
+    for (const escrow of userEscrows) {
+      const createdAt = new Date(escrow.createdAt).getTime();
+      if (createdAt >= currentStart && createdAt <= anchor) {
+        currentWindow += 1;
+      } else if (createdAt >= previousStart && createdAt < currentStart) {
+        previousWindow += 1;
+      }
+    }
+
+    return {
+      currentWindow,
+      previousWindow,
+      percentChange:
+        previousWindow > 0
+          ? Math.round(((currentWindow - previousWindow) / previousWindow) * 100)
+          : null
+    };
+  }, [userEscrows]);
+
   const stats = useMemo(() => {
     const active = userEscrows.filter((e) => e.status === 'created' || e.status === 'funded').length;
     const pending = userEscrows.filter((e) => e.status === 'funded').length;
@@ -52,6 +92,7 @@ export function useDashboardData() {
       .filter((transfer) => publicKey && transfer.to === publicKey)
       .reduce((sum, transfer) => sum + transfer.amount, 0);
     const avgEscrowAmount = userEscrows.length > 0 ? totalEscrowVolume / userEscrows.length : 0;
+    const netFlow = receivedVolume - sentVolume;
 
     return {
       active,
@@ -61,11 +102,14 @@ export function useDashboardData() {
       totalEscrowVolume,
       sentVolume,
       receivedVolume,
+      netFlow,
       avgEscrowAmount,
       completionRate: userEscrows.length > 0 ? Math.round((completed / userEscrows.length) * 100) : 0,
-      weeklyChange: active > 0 ? Math.min(40, 12 + active * 4) : 0
+      weeklyEscrowCurrent: weeklyEscrowActivity.currentWindow,
+      weeklyEscrowPrevious: weeklyEscrowActivity.previousWindow,
+      weeklyEscrowChangePct: weeklyEscrowActivity.percentChange
     };
-  }, [balance, paymentTransfers, publicKey, userEscrows]);
+  }, [balance, paymentTransfers, publicKey, userEscrows, weeklyEscrowActivity]);
 
   const escrowTransactionRows = useMemo<UnifiedTransactionRow[]>(
     () =>
@@ -116,20 +160,77 @@ export function useDashboardData() {
     [escrowTransactionRows, paymentTransactionRows]
   );
 
-  const performanceSegments = useMemo(
-    () => [
-      { label: 'Completed', value: Math.max(8, stats.completionRate), color: '#7ac142' },
-      { label: 'Active', value: Math.max(8, Math.min(30, stats.active * 8)), color: '#1f7a46' },
-      { label: 'Pending', value: Math.max(8, Math.min(20, stats.pending * 8)), color: '#f2b544' }
-    ],
-    [stats.active, stats.completionRate, stats.pending]
-  );
+  const performanceSegments = useMemo(() => {
+    const completedCount = pipelineStats.released + pipelineStats.refunded;
+    const activeCount = pipelineStats.created + pipelineStats.disputed;
+    const pendingCount = pipelineStats.funded;
+    const total = completedCount + activeCount + pendingCount;
 
-  const donut = useMemo(
-    () =>
-      `conic-gradient(${performanceSegments[0].color} 0 ${performanceSegments[0].value}%, ${performanceSegments[1].color} ${performanceSegments[0].value}% ${performanceSegments[0].value + performanceSegments[1].value}%, ${performanceSegments[2].color} ${performanceSegments[0].value + performanceSegments[1].value}% 100%)`,
-    [performanceSegments]
-  );
+    const toPct = (value: number) => (total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0);
+
+    return [
+      { label: 'Completed', value: toPct(completedCount), color: '#7ac142' },
+      { label: 'Active', value: toPct(activeCount), color: '#1f7a46' },
+      { label: 'Pending', value: toPct(pendingCount), color: '#f2b544' }
+    ];
+  }, [pipelineStats.created, pipelineStats.disputed, pipelineStats.funded, pipelineStats.refunded, pipelineStats.released]);
+
+  const donut = useMemo(() => {
+    const [completed, active, pending] = performanceSegments;
+    const total = completed.value + active.value + pending.value;
+
+    if (total <= 0) {
+      return 'conic-gradient(#e5ece8 0 100%)';
+    }
+
+    const completedEnd = completed.value;
+    const activeEnd = completed.value + active.value;
+    return `conic-gradient(${completed.color} 0 ${completedEnd}%, ${active.color} ${completedEnd}% ${activeEnd}%, ${pending.color} ${activeEnd}% 100%)`;
+  }, [performanceSegments]);
+
+  const monthlyPaymentSeries = useMemo(() => {
+    const now = new Date();
+    const months: Array<{
+      key: string;
+      label: string;
+      sent: number;
+      received: number;
+    }> = [];
+
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const point = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const key = `${point.getFullYear()}-${String(point.getMonth() + 1).padStart(2, '0')}`;
+      months.push({
+        key,
+        label: point.toLocaleString('en-US', { month: 'short' }),
+        sent: 0,
+        received: 0
+      });
+    }
+
+    const monthIndex = new Map(months.map((item, index) => [item.key, index] as const));
+
+    for (const transfer of paymentTransfers) {
+      if (transfer.status !== 'success') {
+        continue;
+      }
+
+      const createdAt = new Date(transfer.createdAt);
+      const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+      const index = monthIndex.get(key);
+      if (index === undefined) {
+        continue;
+      }
+
+      if (publicKey && transfer.from === publicKey) {
+        months[index].sent += transfer.amount;
+      } else if (publicKey && transfer.to === publicKey) {
+        months[index].received += transfer.amount;
+      }
+    }
+
+    return months;
+  }, [paymentTransfers, publicKey]);
 
   const transactionHistory = unifiedTransactions;
 
@@ -158,6 +259,7 @@ export function useDashboardData() {
     pipelineStats,
     performanceSegments,
     donut,
+    monthlyPaymentSeries,
     unifiedTransactions,
     transactionHistory,
     totalTransactionVolume,
