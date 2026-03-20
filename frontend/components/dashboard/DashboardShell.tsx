@@ -111,7 +111,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           mobileMenuOpen ? 'block' : 'hidden lg:flex'
         )}
       >
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -258,6 +258,16 @@ export function DashboardShell({ children }: DashboardShellProps) {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden h-9 rounded-xl border-[#d7dfd9] bg-[#f8fbf8] text-[#1e3a2c] hover:bg-[#eef4ef] lg:inline-flex"
+                onClick={() => setSidebarCollapsed((prev) => !prev)}
+              >
+                {sidebarCollapsed ? <ChevronRight className="mr-1 h-4 w-4" /> : <ChevronLeft className="mr-1 h-4 w-4" />}
+                {sidebarCollapsed ? 'Expand' : 'Icons'}
+              </Button>
+
               <Button
                 variant="outline"
                 size="icon"

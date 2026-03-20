@@ -113,15 +113,19 @@ Soroban contract code lives in:
 Use Cargo from the `trustLance` workspace to build/test contract code.
 
 Wallet connected state 
+
 <img width="1784" height="897" alt="Screenshot 2026-03-20 201224" src="https://github.com/user-attachments/assets/73f4cc72-bc51-4043-a1bc-97a14ed83196" />
 
 Balance displayed
+
 <img width="1800" height="894" alt="Screenshot 2026-03-20 201253" src="https://github.com/user-attachments/assets/6325dbfe-5b85-4652-beb2-938fc6b7b5b5" />
 
 Successful testnet transaction
+
 <img width="1827" height="887" alt="Screenshot 2026-03-20 201427" src="https://github.com/user-attachments/assets/a04fe0f3-011b-45a3-bd7e-1167fd4c559d" />
 
 The transaction result is shown to the user
+
 <img width="1827" height="889" alt="Screenshot 2026-03-20 201450" src="https://github.com/user-attachments/assets/4b2d2586-b19c-49e9-9f59-1c3f24af4a89" />
 
 
