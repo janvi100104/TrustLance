@@ -1,89 +1,51 @@
-# TrustLance - Freelance Escrow Platform
+# TrustLance Frontend
 
-TrustLance is a blockchain-based escrow platform built on Stellar that enables secure freelance payments with lower fees and instant settlements.
+Frontend app for TrustLance, built with Next.js App Router, TypeScript, Tailwind CSS, and Stellar wallet integrations.
 
-## Features
+For full project documentation, see the root README:
 
-- Wallet connection with Freighter
-- XLM balance display
-- Simple escrow creation
-- Funding and payment release
-- Multi-wallet support
-- Real-time status tracking
+- [../README.md](../README.md)
 
-## Tech Stack
+## Quick Start
 
-- Next.js 14 with App Router
-- TypeScript
-- Tailwind CSS
-- shadcn/ui components
-- @stellar/stellar-sdk
-- @stellar/freighter-api
-- @creit.tech/stellar-wallets-kit
-- Zustand for state management
-- Sonner for notifications
+```bash
+cd frontend
+pnpm install
+```
 
-## Installation
+Create `.env.local`:
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd stellar-connect-wallet
-   ```
+```bash
+NEXT_PUBLIC_STELLAR_NETWORK=TESTNET
+NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org
+NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+NEXT_PUBLIC_ESCROW_CONTRACT_ID=
+```
 
-2. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
+Run the app:
 
-3. Install dependencies:
-   ```bash
-   pnpm install
-   ```
+```bash
+pnpm dev
+```
 
-4. Set up environment variables:
-   ```bash
-   cp .env.local.example .env.local
-   ```
+Open `http://localhost:3000`.
 
-5. Run the development server:
-   ```bash
-   pnpm dev
-   ```
+## Scripts
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser.
+| Command | Description |
+| --- | --- |
+| `pnpm dev` | Development server |
+| `pnpm build` | Production build |
+| `pnpm start` | Start production server |
+| `pnpm lint` | Run ESLint |
 
-## Setup Instructions
+## Key Directories
 
-1. Install the [Freighter wallet extension](https://chrome.google.com/webstore/detail/freighter/xexzokzghmdukkyscdfjteluazmyijvw)
-2. Create a testnet account using the [Stellar Laboratory](https://laboratory.stellar.org/) or [Stellar Quest faucet](https://dashboard.stellar.org/)
-3. Fund your testnet account with testnet lumens using the faucet
-4. Connect your wallet to the application
-
-## Project Structure
-
-- `app/page.tsx` - Main landing page
-- `components/wallet/` - Wallet-related components
-- `components/escrow/` - Escrow functionality components
-- `store/useWallet.ts` - Wallet state management
-- `lib/utils.ts` - Utility functions
-
-## Level 1 Features (White Belt)
-
-- ✅ Wallet connection with Freighter
-- ✅ Display wallet address (truncated)
-- ✅ Show XLM balance
-- ✅ Simple payment form
-- ✅ Create simple escrow
-- ✅ Fund escrow functionality
-- ✅ Release payment functionality
-- ✅ Success/error notifications
-- ✅ Mobile responsive design
-
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-MIT
+```text
+frontend/
+├── app/
+├── components/
+├── lib/
+│   └── stellar/
+└── store/
+```

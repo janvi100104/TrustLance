@@ -1,101 +1,122 @@
-# TrustLance - Freelance Escrow Platform
+# TrustLance
 
-TrustLance is a blockchain-based escrow platform built on Stellar that enables secure freelance payments with lower fees and instant settlements.
+TrustLance is a Stellar-based freelance escrow platform.  
+It helps clients and freelancers lock funds safely, track escrow lifecycle states, and settle payments through connected wallets.
 
-## Features
+![TrustLance Hero](./frontend/public/landing/hero-trustlance-v2.png)
 
-- Wallet connection with Freighter
-- XLM balance display
-- Simple escrow creation
-- Funding and payment release
-- Multi-wallet support
-- Real-time status tracking
+## Highlights
+
+- Multi-wallet connect flow (Freighter, xBull, Albedo, LOBSTR, Rabet, Hana, Hot Wallet, Klever)
+- Escrow lifecycle actions: create, fund, release, refund
+- Stellar payment flow for direct XLM transfers
+- Dashboard for escrow contracts, transactions, and wallet/network settings
+- Persistent local dashboard records via Zustand stores
+- Modern Next.js frontend with App Router and shadcn-style UI primitives
 
 ## Tech Stack
 
-- Next.js 14 with App Router
+- Next.js `16`
+- React `19`
 - TypeScript
-- Tailwind CSS
-- shadcn/ui components
-- @stellar/stellar-sdk
-- @stellar/freighter-api
-- @creit.tech/stellar-wallets-kit
-- Zustand for state management
-- Sonner for notifications
+- Tailwind CSS `v4`
+- Zustand
+- Stellar SDK + Freighter API + Stellar Wallets Kit
 
-## Installation
+## Repository Structure
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd stellar-connect-wallet
-   ```
+```text
+.
+├── frontend/                 # Next.js app
+│   ├── app/                  # Routes (landing, dashboard, pricing, features)
+│   ├── components/           # UI + feature components
+│   ├── lib/stellar/          # Wallet, transaction, and contract helpers
+│   └── store/                # Zustand stores
+├── trustLance/               # Soroban Rust workspace
+│   └── contracts/escrow/     # Escrow smart contract
+├── scripts/                  # Utility scripts
+└── docs/                     # Project docs
+```
 
-2. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
+## Quick Start (Frontend)
 
-3. Install dependencies:
-   ```bash
-   pnpm install
-   ```
+### 1) Prerequisites
 
-4. Set up environment variables:
-   ```bash
-   cp .env.local.example .env.local
-   ```
+- Node.js `20+`
+- `pnpm`
+- A Stellar wallet extension (Freighter recommended)
 
-5. Run the development server:
-   ```bash
-   pnpm dev
-   ```
+### 2) Install and run
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser.
+```bash
+git clone <your-repo-url>
+cd stellar-connect-wallet/frontend
+pnpm install
+```
 
-## Setup Instructions
+Create `frontend/.env.local`:
 
-1. Install the [Freighter wallet extension](https://chrome.google.com/webstore/detail/freighter/xexzokzghmdukkyscdfjteluazmyijvw)
-2. Create a testnet account using the [Stellar Laboratory](https://laboratory.stellar.org/) or [Stellar Quest faucet](https://dashboard.stellar.org/)
-3. Fund your testnet account with testnet lumens using the faucet
-4. Connect your wallet to the application
+```bash
+NEXT_PUBLIC_STELLAR_NETWORK=TESTNET
+NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org
+NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+NEXT_PUBLIC_ESCROW_CONTRACT_ID=
+```
 
-## Project Structure
+Start dev server:
 
-- `frontend/app/page.tsx` - Main landing page
-- `frontend/components/wallet/` - Wallet-related components
-- `frontend/components/escrow/` - Escrow functionality components
-- `frontend/store/useWallet.ts` - Wallet state management
-- `frontend/lib/utils.ts` - Utility functions
+```bash
+pnpm dev
+```
 
-## Level 1 Features (White Belt)
+Open `http://localhost:3000`.
 
-- ✅ Wallet connection with Freighter
-- ✅ Display wallet address (truncated)
-- ✅ Show XLM balance
-- ✅ Simple payment form
-- ✅ Create simple escrow
-- ✅ Fund escrow functionality
-- ✅ Release payment functionality
-- ✅ Success/error notifications
-- ✅ Mobile responsive design
+## Frontend Scripts
 
+| Command | Description |
+| --- | --- |
+| `pnpm dev` | Run local dev server |
+| `pnpm build` | Build production app |
+| `pnpm start` | Start production server |
+| `pnpm lint` | Run ESLint |
 
-Wallet connected state:
-<img width="1792" height="787" alt="Screenshot 2026-03-06 191517" src="https://github.com/user-attachments/assets/8426fcd0-f05e-4b20-bb77-d209dbcfaa5e" />
+## Wallet + Network Notes
 
-Balance displayed
-<img width="1835" height="890" alt="Screenshot 2026-03-06 191553" src="https://github.com/user-attachments/assets/bb5b43b0-42c1-4acf-92ad-daf9bd0c1101" />
+- Wallet connection and signing are handled through Stellar Wallets Kit and Freighter API.
+- Balance fetch uses Horizon (`NEXT_PUBLIC_HORIZON_URL`).
+- Escrow actions require a deployed contract ID in `NEXT_PUBLIC_ESCROW_CONTRACT_ID`.
+- Recommended network for development is `TESTNET`.
 
-Successful testnet transaction
-<img width="1854" height="893" alt="Screenshot 2026-03-06 191650" src="https://github.com/user-attachments/assets/31cc9b10-cdf1-4244-a58c-36efdd1c1373" />
+## Dashboard Data Notes
 
-The transaction result is shown to the user
-<img width="1802" height="801" alt="Screenshot 2026-03-06 191808" src="https://github.com/user-attachments/assets/d8d5d2f2-c8ef-4b21-a6f7-f6a2190532c2" />
+- Wallet balance and signed transactions are real network interactions.
+- Dashboard records (escrows/transfers) are stored in local persisted Zustand stores.
+- Dashboard analytics are computed from those stored records.
+
+## Main Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Landing page |
+| `/dashboard` | Overview and analytics |
+| `/dashboard/escrow` | Create escrow |
+| `/dashboard/escrow-contracts` | Manage escrow contracts |
+| `/dashboard/transactions` | Send/receive + history |
+| `/dashboard/settings` | Wallet/network/preferences |
+| `/features`, `/how-it-works`, `/pricing` | Marketing pages |
+
+## Smart Contract Workspace
+
+Soroban contract code lives in:
+
+- `trustLance/contracts/escrow`
+
+Use Cargo from the `trustLance` workspace to build/test contract code.
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+Contributions are welcome.  
+Open an issue first for significant feature or architectural changes.
 
 ## License
 
