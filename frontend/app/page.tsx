@@ -1,830 +1,400 @@
-'use client';
-
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { WalletButton } from '@/components/wallet/WalletButton';
-import { useWallet } from '@/store/useWallet';
+import Image from 'next/image';
 import Link from 'next/link';
+import type { LucideIcon } from 'lucide-react';
+import { WalletButton } from '@/components/wallet/WalletButton';
 import {
   ArrowRight,
-  Check,
-  Clock,
-  DollarSign,
-  Globe,
-  LayoutDashboard,
-  Lock,
-  Rocket,
-  Shield,
+  CirclePlay,
+  ClipboardCheck,
+  Coins,
+  HandCoins,
+  Link2,
+  LockKeyhole,
+  ShieldCheck,
   Sparkles,
-  TrendingUp,
-  Users,
-  Zap,
-  ChevronDown,
   Star,
-  ExternalLink,
-  Menu,
-  X,
-  Twitter,
-  Github,
-  MessageCircle
+  WalletCards,
 } from 'lucide-react';
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
 
-// Animation styles
-const blobAnimation = `
-  @keyframes blob {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(30px, -50px) scale(1.1); }
-    66% { transform: translate(-20px, 20px) scale(0.9); }
+const HERO_IMAGE_SRC = '/landing/hero-trustlance-v2.png';
+const STEPS_IMAGE_SRC = '/landing/steps-trustlance-v2.png';
+
+const navLinks = [
+  'Home',
+  'How It Works',
+  'Post a Project',
+  'Browse Talent',
+  'Pricing',
+  'Login',
+] as const;
+
+const trustStats = [
+  { value: '10k+', label: 'Verified Projects' },
+  { value: '50k+', label: 'Freelancers' },
+  { value: '99.8%', label: 'Client Satisfaction' },
+] as const;
+
+const reasons: Array<{ title: string; description: string; icon: LucideIcon }> = [
+  {
+    title: 'Secure Escrow Locker',
+    description: 'Client funds stay locked in a secure smart contract before work starts.',
+    icon: Link2,
+  },
+  {
+    title: 'Transparent Milestones',
+    description: 'Work is submitted and approved via clearly defined project milestones.',
+    icon: ClipboardCheck,
+  },
+  {
+    title: 'Instant Payouts on Approval',
+    description: "Funds are instantly released to the freelancer's wallet on client approval.",
+    icon: WalletCards,
+  },
+];
+
+const guaranteeSteps = [
+  'Create Profile & Verify.',
+  'Post or Apply for Project.',
+  'Define & Complete Milestones.',
+  'Work Approved & Paid.',
+] as const;
+
+const stepStats = [
+  { value: '160+', label: 'Avg. Transaction Speed' },
+  { value: '500+', label: 'Escrowed Contracts' },
+  { value: '24 Lakh', label: 'Secure Funds' },
+  { value: '12K', label: 'Funds' },
+] as const;
+
+const categories: Array<{ title: string; description: string; icon: LucideIcon }> = [
+  {
+    title: 'Blockchain Development',
+    description: 'Build secure smart contract systems with verified milestone rails.',
+    icon: Link2,
+  },
+  {
+    title: 'FinTech Design',
+    description: 'Design frictionless finance products with trust-first user journeys.',
+    icon: WalletCards,
+  },
+  {
+    title: 'Secure Data Analysis',
+    description: 'Deliver data insights with encrypted workflows and transparent payouts.',
+    icon: ShieldCheck,
+  },
+];
+
+const landingStyles = `
+.tl-shell {
+  --tl-cream: #f7f1e4;
+  --tl-gold: #f5c14f;
+  background:
+    radial-gradient(95% 120% at 10% 0%, rgba(73, 139, 123, 0.3) 0%, rgba(73, 139, 123, 0) 55%),
+    radial-gradient(80% 120% at 100% 15%, rgba(27, 82, 74, 0.35) 0%, rgba(27, 82, 74, 0) 65%),
+    linear-gradient(135deg, #2d7f71 0%, #184f47 60%, #103d38 100%);
+}
+
+.tl-hero-surface {
+  background:
+    radial-gradient(90% 95% at 0% 0%, rgba(113, 191, 169, 0.18) 0%, rgba(113, 191, 169, 0) 65%),
+    radial-gradient(80% 100% at 100% 0%, rgba(99, 178, 158, 0.14) 0%, rgba(99, 178, 158, 0) 62%),
+    linear-gradient(135deg, #134f48 0%, #0d3e39 55%, #0a3430 100%);
+}
+
+.tl-fade-in {
+  animation: tlFadeIn 700ms ease both;
+}
+
+.tl-float {
+  animation: tlFloat 5.5s ease-in-out infinite;
+}
+
+.tl-float-delay {
+  animation-delay: 1.2s;
+}
+
+@keyframes tlFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
   }
-  .animate-blob {
-    animation: blob 10s infinite;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  .animation-delay-2000 {
-    animation-delay: 2s;
+}
+
+@keyframes tlFloat {
+  0%, 100% {
+    transform: translateY(0px);
   }
-  .animation-delay-4000 {
-    animation-delay: 4s;
+  50% {
+    transform: translateY(-8px);
   }
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-20px); }
-  }
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-  @keyframes gradient {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
-  .animate-gradient {
-    background-size: 200% 200%;
-    animation: gradient 15s ease infinite;
-  }
-  @keyframes pulse-slow {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.8; }
-  }
-  .animate-pulse-slow {
-    animation: pulse-slow 3s ease-in-out infinite;
-  }
-  @keyframes bounce-slow {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-  .animate-bounce-slow {
-    animation: bounce-slow 2s ease-in-out infinite;
-  }
+}
 `;
 
-export default function LandingPage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeFaq, setActiveFaq] = useState<number | null>(null);
-  const { isConnected } = useWallet();
-
-  const features = [
-    {
-      icon: DollarSign,
-      title: '1% Fees',
-      description: 'Save 19% compared to traditional platforms',
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-    },
-    {
-      icon: Zap,
-      title: 'Instant Settlement',
-      description: 'Get paid in seconds, not weeks',
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100',
-    },
-    {
-      icon: Lock,
-      title: 'Secure Escrow',
-      description: 'Funds protected by smart contracts',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-    },
-    {
-      icon: Globe,
-      title: 'Global Access',
-      description: 'Work across borders without restrictions',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-    },
-    {
-      icon: TrendingUp,
-      title: 'Transparent Tracking',
-      description: 'Real-time escrow status updates',
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-100',
-    },
-    {
-      icon: Sparkles,
-      title: 'Smart Contracts',
-      description: 'Automated payments on Stellar',
-      color: 'text-pink-600',
-      bgColor: 'bg-pink-100',
-    },
-  ];
-
-  const steps = [
-    {
-      number: '1',
-      title: 'Create Escrow',
-      description: 'Set project terms and amount',
-      icon: LayoutDashboard,
-    },
-    {
-      number: '2',
-      title: 'Fund Escrow',
-      description: 'Client deposits funds securely',
-      icon: DollarSign,
-    },
-    {
-      number: '3',
-      title: 'Complete Work',
-      description: 'Deliver according to terms',
-      icon: Rocket,
-    },
-    {
-      number: '4',
-      title: 'Get Paid',
-      description: 'Instant payment release',
-      icon: Zap,
-    },
-  ];
-
-  const testimonials = [
-    {
-      content: "TrustLance saved me from payment disputes. The 1% fee vs 20% on Upwork is a game-changer!",
-      author: 'Sarah Chen',
-      role: 'Web Developer',
-      rating: 5,
-    },
-    {
-      content: "Finally, a platform that treats freelancers fairly. Instant payments and no ridiculous fees.",
-      author: 'Marcus Johnson',
-      role: 'Graphic Designer',
-      rating: 5,
-    },
-    {
-      content: "As a client, I love the transparency. Funds are locked safely and released automatically.",
-      author: 'Emily Rodriguez',
-      role: 'Startup Founder',
-      rating: 5,
-    },
-  ];
-
-  const stats = [
-    { value: '$2.5M+', label: 'Escrowed' },
-    { value: '1,200+', label: 'Users' },
-    { value: '98%', label: 'Success Rate' },
-    { value: '< 5s', label: 'Settlement' },
-  ];
-
-  const faqs = [
-    {
-      question: 'What is TrustLance?',
-      answer: 'TrustLance is a blockchain-based escrow platform that protects freelancers and clients with smart contracts on the Stellar network. It ensures secure payments with minimal fees.',
-    },
-    {
-      question: 'How much does it cost?',
-      answer: 'Just 1% per transaction. No monthly fees, no hidden charges. For a $1,000 project, you pay only $10 in fees compared to $200 on traditional platforms.',
-    },
-    {
-      question: 'Do I need to create an account?',
-      answer: 'No! Just connect your Stellar wallet (Freighter, xBull, Albedo, etc.) and you\'re ready to go. No email, password, or KYC required.',
-    },
-    {
-      question: 'Which wallets are supported?',
-      answer: 'We support Freighter, xBull, Albedo, LOBSTR, and any other Stellar-compatible wallet. More wallets are being added regularly.',
-    },
-    {
-      question: 'Is my money safe?',
-      answer: 'Yes! Funds are held in smart contracts on the Stellar blockchain. No one can access them except according to the agreed escrow terms.',
-    },
-    {
-      question: 'How long does payment take?',
-      answer: 'Instant! Once the client releases payment, funds arrive in your wallet within 3-5 seconds. No bank delays or waiting periods.',
-    },
-  ];
-
+function TopNav() {
   return (
-    <>
-      <style>{blobAnimation}</style>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 overflow-x-hidden">
-        {/* Navigation */}
-        <nav className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 border-b border-slate-200/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              {/* Logo */}
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  TrustLance
-                </span>
-              </div>
-
-              {/* Desktop Menu */}
-              <div className="hidden md:flex items-center gap-8">
-                <a href="#features" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Features
-                </a>
-                <a href="#how-it-works" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  How It Works
-                </a>
-                <a href="#pricing" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Pricing
-                </a>
-                <a href="#faq" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  FAQ
-                </a>
-                <WalletButton />
-              </div>
-
-              {/* Mobile Menu Button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg hover:bg-slate-100"
-              >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
-            </div>
-
-            {/* Mobile Menu */}
-            {mobileMenuOpen && (
-              <div className="md:hidden py-4 border-t border-slate-200">
-                <div className="flex flex-col gap-4">
-                  <a href="#features" className="text-slate-600 hover:text-slate-900">Features</a>
-                  <a href="#how-it-works" className="text-slate-600 hover:text-slate-900">How It Works</a>
-                  <a href="#pricing" className="text-slate-600 hover:text-slate-900">Pricing</a>
-                  <a href="#faq" className="text-slate-600 hover:text-slate-900">FAQ</a>
-                  <WalletButton />
-                </div>
-              </div>
-            )}
-          </div>
-        </nav>
-
-        {/* Hero Section */}
-        <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
-          {/* Animated Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 animate-gradient" />
-          
-          {/* Floating Blobs */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full mix-blend-overlay filter blur-3xl animate-blob" />
-            <div className="absolute top-40 right-10 w-72 h-72 bg-purple-300/20 rounded-full mix-blend-overlay filter blur-3xl animate-blob animation-delay-2000" />
-            <div className="absolute -bottom-20 left-1/2 w-72 h-72 bg-blue-300/20 rounded-full mix-blend-overlay filter blur-3xl animate-blob animation-delay-4000" />
-          </div>
-
-          {/* Content */}
-          <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            {/* Logo Animation */}
-            <div className="animate-float mb-8">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl">
-                <Shield className="w-12 h-12 text-white" />
-              </div>
-            </div>
-
-            {/* Title */}
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-              TrustLance
-            </h1>
-            
-            <p className="text-xl md:text-2xl text-blue-100 mb-4 max-w-3xl mx-auto">
-              Secure Freelance Escrow on Stellar
-            </p>
-            
-            <p className="text-lg md:text-xl text-blue-200 mb-12 max-w-2xl mx-auto">
-              Get paid safely with blockchain-powered escrow. 
-              <br />
-              <span className="font-semibold text-white">1% fees</span>. 
-              <span className="font-semibold text-white"> Instant settlements</span>. 
-              <span className="font-semibold text-white"> Zero disputes</span>.
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-              {isConnected ? (
-                <>
-                  <Link href="/dashboard">
-                    <Button
-                      size="lg"
-                      className="bg-white text-blue-600 hover:bg-blue-50 text-lg px-8 py-6 h-auto rounded-xl shadow-2xl hover:shadow-white/20 transition-all hover:scale-105"
-                    >
-                      <LayoutDashboard className="mr-2 h-5 w-5" />
-                      Go to Dashboard
-                    </Button>
-                  </Link>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="bg-white/10 text-white border-white/30 hover:bg-white/20 text-lg px-8 py-6 h-auto rounded-xl backdrop-blur-sm"
-                  >
-                    <ExternalLink className="mr-2 h-5 w-5" />
-                    View Demo
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    size="lg"
-                    className="bg-white text-blue-600 hover:bg-blue-50 text-lg px-8 py-6 h-auto rounded-xl shadow-2xl hover:shadow-white/20 transition-all hover:scale-105"
-                  >
-                    <Rocket className="mr-2 h-5 w-5" />
-                    Connect Wallet - Free
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="bg-white/10 text-white border-white/30 hover:bg-white/20 text-lg px-8 py-6 h-auto rounded-xl backdrop-blur-sm"
-                  >
-                    <ExternalLink className="mr-2 h-5 w-5" />
-                    View Demo
-                  </Button>
-                </>
-              )}
-            </div>
-
-            {/* Trust Indicators */}
-            <div className="flex flex-wrap justify-center gap-2 text-blue-200 text-sm">
-              <span className="flex items-center gap-1">
-                <Check className="w-4 h-4" /> No signup required
-              </span>
-              <span className="flex items-center gap-1">
-                <Check className="w-4 h-4" /> Instant setup
-              </span>
-              <span className="flex items-center gap-1">
-                <Check className="w-4 h-4" /> Non-custodial
-              </span>
-              <span className="flex items-center gap-1">
-                <Check className="w-4 h-4" /> No KYC
-              </span>
-            </div>
-
-            {/* Scroll Indicator */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce-slow">
-              <ChevronDown className="w-8 h-8 text-white/60" />
-            </div>
-          </div>
-        </section>
-
-        {/* Stats Section */}
-        <section className="py-20 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-slate-900 mb-4">
-                Trusted by Freelancers Worldwide
-              </h2>
-              <p className="text-xl text-slate-600">
-                Join the revolution in freelance payments
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {stats.map((stat, index) => (
-                <div key={index} className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50">
-                  <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                    {stat.value}
-                  </div>
-                  <div className="text-slate-600 font-medium">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section id="features" className="py-24 bg-gradient-to-b from-white to-slate-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <Badge className="mb-4 bg-blue-100 text-blue-700 hover:bg-blue-200">
-                Features
-              </Badge>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
-                Why Choose TrustLance?
-              </h2>
-              <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                Everything you need to get paid safely and quickly
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {features.map((feature, index) => (
-                <Card 
-                  key={index}
-                  className="group hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-slate-200 bg-white"
-                >
-                  <CardHeader>
-                    <div className={cn(
-                      'w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110',
-                      feature.bgColor
-                    )}>
-                      <feature.icon className={cn('w-7 h-7', feature.color)} />
-                    </div>
-                    <CardTitle className="text-xl">{feature.title}</CardTitle>
-                    <CardDescription className="text-base">
-                      {feature.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* How It Works Section */}
-        <section id="how-it-works" className="py-24 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <Badge className="mb-4 bg-purple-100 text-purple-700 hover:bg-purple-200">
-                Process
-              </Badge>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
-                How TrustLance Works
-              </h2>
-              <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                Get started in minutes, get paid in seconds
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {steps.map((step, index) => (
-                <div key={index} className="relative">
-                  {/* Connector Line */}
-                  {index < steps.length - 1 && (
-                    <div className="hidden lg:block absolute top-8 left-1/2 w-full h-0.5 bg-gradient-to-r from-blue-200 to-purple-200" />
-                  )}
-                  
-                  <div className="relative bg-white p-6 rounded-2xl border-2 border-slate-200 hover:border-blue-500 transition-colors text-center">
-                    {/* Step Number */}
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white text-2xl font-bold mb-4 shadow-lg">
-                      {step.number}
-                    </div>
-                    
-                    <step.icon className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-slate-900 mb-2">
-                      {step.title}
-                    </h3>
-                    <p className="text-slate-600">
-                      {step.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA */}
-            <div className="text-center mt-16">
-              <Button 
-                size="lg"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-lg px-8 py-6 h-auto rounded-xl"
-              >
-                Start Creating Escrow
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonials Section */}
-        <section className="py-24 bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <Badge className="mb-4 bg-green-100 text-green-700 hover:bg-green-200">
-                Testimonials
-              </Badge>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
-                What Our Users Say
-              </h2>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              {testimonials.map((testimonial, index) => (
-                <Card 
-                  key={index}
-                  className="bg-white border-slate-200 shadow-lg hover:shadow-2xl transition-shadow"
-                >
-                  <CardHeader>
-                    <div className="flex gap-1 mb-4">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                    <CardDescription className="text-base text-slate-700 italic">
-                      "{testimonial.content}"
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
-                        {testimonial.author[0]}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-900">
-                          {testimonial.author}
-                        </div>
-                        <div className="text-sm text-slate-600">
-                          {testimonial.role}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing Section */}
-        <section id="pricing" className="py-24 bg-white">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <Badge className="mb-4 bg-blue-100 text-blue-700 hover:bg-blue-200">
-                Pricing
-              </Badge>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
-                Simple, Transparent Pricing
-              </h2>
-              <p className="text-xl text-slate-600">
-                Always 1% - No hidden fees, no surprises
-              </p>
-            </div>
-
-            <Card className="border-2 border-blue-500 shadow-2xl overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white text-center">
-                <DollarSign className="w-12 h-12 mx-auto mb-2" />
-                <h3 className="text-3xl font-bold mb-2">Standard Plan</h3>
-                <p className="text-blue-100">Perfect for freelancers of all sizes</p>
-              </div>
-              
-              <CardContent className="p-8">
-                <div className="text-center mb-8">
-                  <div className="text-6xl font-bold text-slate-900 mb-2">
-                    1%
-                  </div>
-                  <div className="text-xl text-slate-600">per transaction</div>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                  {[
-                    'Unlimited escrows',
-                    'Smart contracts on Stellar',
-                    'Instant settlement',
-                    'Real-time tracking',
-                    'Email support',
-                    'No monthly fees',
-                  ].map((feature, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                      <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span className="text-slate-700">{feature}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Fee Examples */}
-                <div className="bg-slate-50 rounded-xl p-6 mb-8">
-                  <h4 className="font-semibold text-slate-900 mb-4">Fee Examples:</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">$1,000 project</span>
-                      <span className="font-semibold text-slate-900">$10 fee</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">$10,000 project</span>
-                      <span className="font-semibold text-slate-900">$100 fee</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">$100,000 project</span>
-                      <span className="font-semibold text-slate-900">$1,000 fee</span>
-                    </div>
-                  </div>
-                </div>
-
-                <Button 
-                  size="lg"
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-lg py-6 h-auto"
-                >
-                  Start Free - No Signup Required
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Comparison */}
-            <div className="mt-16">
-              <h3 className="text-2xl font-bold text-center text-slate-900 mb-8">
-                Compare the Savings
-              </h3>
-              <div className="space-y-4">
-                {[
-                  { platform: 'Upwork', fee: 20, amount: 1000 },
-                  { platform: 'Fiverr', fee: 20, amount: 1000 },
-                  { platform: 'Freelancer', fee: 10, amount: 500 },
-                  { platform: 'TrustLance', fee: 1, amount: 50, highlight: true },
-                ].map((item, index) => (
-                  <div 
-                    key={index}
-                    className={cn(
-                      'flex items-center gap-4 p-4 rounded-xl',
-                      item.highlight ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-500' : 'bg-slate-50'
-                    )}
-                  >
-                    <div className="w-32 font-semibold text-slate-900">{item.platform}</div>
-                    <div className="flex-1 h-8 bg-slate-200 rounded-full overflow-hidden">
-                      <div 
-                        className={cn(
-                          'h-full rounded-full',
-                          item.highlight 
-                            ? 'bg-gradient-to-r from-blue-600 to-purple-600' 
-                            : 'bg-slate-400'
-                        )}
-                        style={{ width: `${item.fee * 5}%` }}
-                      />
-                    </div>
-                    <div className="w-24 text-right">
-                      <span className="font-bold text-slate-900">{item.fee}%</span>
-                    </div>
-                    <div className="w-20 text-right">
-                      <span className={cn(
-                        'font-semibold',
-                        item.highlight ? 'text-green-600' : 'text-slate-600'
-                      )}>
-                        ${item.amount}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-center text-green-600 font-semibold mt-6">
-                Save $950 on a $5,000 project compared to Upwork!
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* FAQ Section */}
-        <section id="faq" className="py-24 bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <Badge className="mb-4 bg-purple-100 text-purple-700 hover:bg-purple-200">
-                FAQ
-              </Badge>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
-                Frequently Asked Questions
-              </h2>
-            </div>
-
-            <div className="space-y-4">
-              {faqs.map((faq, index) => (
-                <Card 
-                  key={index}
-                  className="border-slate-200 bg-white cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => setActiveFaq(activeFaq === index ? null : index)}
-                >
-                  <CardHeader className="py-4">
-                    <div className="flex justify-between items-center">
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        {faq.question}
-                      </CardTitle>
-                      <ChevronDown 
-                        className={cn(
-                          'w-5 h-5 text-slate-500 transition-transform',
-                          activeFaq === index && 'rotate-180'
-                        )}
-                      />
-                    </div>
-                  </CardHeader>
-                  {activeFaq === index && (
-                    <CardContent className="pt-0 pb-4">
-                      <p className="text-slate-600 leading-relaxed">
-                        {faq.answer}
-                      </p>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="py-24 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Ready to Get Started?
-            </h2>
-            <p className="text-xl text-blue-100 mb-12 max-w-2xl mx-auto">
-              Join thousands of freelancers getting paid safely with TrustLance
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <Button 
-                size="lg"
-                className="bg-white text-blue-600 hover:bg-blue-50 text-lg px-8 py-6 h-auto rounded-xl shadow-2xl"
-              >
-                <Rocket className="mr-2 h-5 w-5" />
-                Connect Wallet - Free
-              </Button>
-              <Button 
-                size="lg"
-                variant="outline"
-                className="bg-white/10 text-white border-white/30 hover:bg-white/20 text-lg px-8 py-6 h-auto rounded-xl backdrop-blur-sm"
-              >
-                <LayoutDashboard className="mr-2 h-5 w-5" />
-                View Dashboard
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-4 text-blue-100 text-sm">
-              <span className="flex items-center gap-2">
-                <Check className="w-4 h-4" /> No signup required
-              </span>
-              <span className="flex items-center gap-2">
-                <Check className="w-4 h-4" /> Instant setup
-              </span>
-              <span className="flex items-center gap-2">
-                <Check className="w-4 h-4" /> Non-custodial
-              </span>
-            </div>
-          </div>
-        </section>
-
-        {/* Footer */}
-        <footer className="bg-slate-900 text-slate-300 py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-5 gap-8 mb-12">
-              {/* Brand */}
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-xl font-bold text-white">TrustLance</span>
-                </div>
-                <p className="text-slate-400 mb-4">
-                  Secure freelance escrow on Stellar blockchain. Get paid safely, every time.
-                </p>
-                <div className="flex gap-4">
-                  <a href="#" className="hover:text-white transition-colors">
-                    <Twitter className="w-5 h-5" />
-                  </a>
-                  <a href="#" className="hover:text-white transition-colors">
-                    <Github className="w-5 h-5" />
-                  </a>
-                  <a href="#" className="hover:text-white transition-colors">
-                    <MessageCircle className="w-5 h-5" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Links */}
-              <div>
-                <h4 className="font-semibold text-white mb-4">Product</h4>
-                <ul className="space-y-2">
-                  <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                  <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Dashboard</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-white mb-4">Company</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="hover:text-white transition-colors">About</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-white mb-4">Resources</h4>
-                <ul className="space-y-2">
-                  <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Docs</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-slate-400 text-sm">
-                © 2024 TrustLance. Built on Stellar.
-              </p>
-              <div className="flex gap-6 text-sm">
-                <a href="#" className="hover:text-white transition-colors">Terms</a>
-                <a href="#" className="hover:text-white transition-colors">Privacy</a>
-                <a href="#" className="hover:text-white transition-colors">Cookies</a>
-              </div>
-            </div>
-          </div>
-        </footer>
+    <div className="flex items-center justify-between gap-4 text-white/90">
+      <div className="flex items-center gap-2.5">
+        <div className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-300/15 ring-1 ring-emerald-100/30">
+          <ShieldCheck className="h-4 w-4 text-emerald-100" />
+        </div>
+        <span className="text-lg font-semibold tracking-tight">TrustLance</span>
       </div>
-    </>
+
+      <div className="hidden items-center gap-3 md:flex">
+        {navLinks.map((link) => (
+          <Link
+            key={link}
+            href="#"
+            className="text-xs font-medium text-emerald-50/85 transition-colors hover:text-emerald-50"
+          >
+            {link}
+          </Link>
+        ))}
+      </div>
+
+      <WalletButton variant="nav" />
+    </div>
+  );
+}
+
+function HeroActions() {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-slate-950/45 px-4 py-2 text-sm font-medium text-white shadow-[0_8px_20px_rgba(0,0,0,0.28)]"
+      >
+        <span className="text-base leading-none"></span>
+        <span>App Store</span>
+      </button>
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-full px-2 py-1 text-sm font-medium text-emerald-100 transition-colors hover:text-white"
+      >
+        <CirclePlay className="h-6 w-6 text-[var(--tl-gold)]" />
+        Watch Demo
+      </button>
+    </div>
+  );
+}
+
+function RatingRow() {
+  return (
+    <div className="flex items-center gap-1 text-[var(--tl-gold)]">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <Star key={index} className="h-4 w-4 fill-current" />
+      ))}
+    </div>
+  );
+}
+
+function TrustStats() {
+  return (
+    <div className="grid grid-cols-3 gap-3 pt-4">
+      {trustStats.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-center backdrop-blur-sm"
+        >
+          <p className="text-2xl font-semibold text-white sm:text-3xl">{stat.value}</p>
+          <p className="mt-1 text-xs text-emerald-100/80">{stat.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HeroImageFrame() {
+  return (
+    <div className="relative mx-auto h-[340px] w-[255px] sm:h-[420px] sm:w-[320px]">
+      <div className="tl-float absolute -left-5 top-10 rounded-full bg-amber-300/90 p-1.5 text-slate-900 shadow-lg">
+        <Sparkles className="h-4 w-4" />
+      </div>
+      <div className="tl-float tl-float-delay absolute -right-3 top-24 rounded-full bg-amber-300/90 p-1.5 text-slate-900 shadow-lg">
+        <Coins className="h-4 w-4" />
+      </div>
+
+      <div className="absolute inset-0 rounded-[2.4rem] border border-emerald-100/25 bg-gradient-to-b from-emerald-300/20 to-emerald-900/15" />
+      <div className="absolute inset-x-6 top-6 h-2/5 rounded-full bg-emerald-300/20 blur-2xl" />
+
+      <div className="absolute inset-3 overflow-hidden rounded-[2rem] border border-emerald-100/25 bg-gradient-to-b from-white/20 to-emerald-950/5">
+        <Image
+          src={HERO_IMAGE_SRC}
+          alt="Smiling professional woman in green vest"
+          fill
+          priority
+          className="object-cover object-[50%_22%] scale-[1.2] sm:scale-[1.26] drop-shadow-[0_16px_28px_rgba(0,0,0,0.3)]"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b3732]/18 via-transparent to-[#0b3732]/8" />
+      </div>
+    </div>
+  );
+}
+
+function StepsImageFrame() {
+  return (
+    <div className="relative mx-auto h-[340px] w-[255px] sm:h-[420px] sm:w-[320px]">
+      <div className="absolute inset-0 rounded-[40%] border border-emerald-900/20 bg-gradient-to-b from-emerald-200/30 to-emerald-400/10" />
+      <div className="absolute -right-3 top-3 rounded-full border border-amber-300/70 bg-amber-200/90 p-2 text-amber-950 shadow">
+        <HandCoins className="h-5 w-5" />
+      </div>
+      <div className="absolute left-3 top-10 rounded-full border border-white/50 bg-white/80 p-1.5 text-emerald-900 shadow">
+        <Star className="h-4 w-4 fill-emerald-900" />
+      </div>
+
+      <div className="absolute inset-3 overflow-hidden rounded-[45%] border border-emerald-900/15 bg-gradient-to-b from-[#f0dcc8] to-[#e6c7ad]">
+        <Image
+          src={STEPS_IMAGE_SRC}
+          alt="Woman holding key and showing four fingers"
+          fill
+          className="object-cover object-[52%_20%] scale-[1.26] sm:scale-[1.34] drop-shadow-[0_16px_26px_rgba(0,0,0,0.22)]"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#d4b48c]/16 via-transparent to-[#e4ccb0]/8" />
+      </div>
+    </div>
+  );
+}
+
+function ReasonsSection() {
+  return (
+    <section className="space-y-5">
+      <h2 className="text-center text-3xl font-semibold tracking-tight text-[#142f2b] sm:text-4xl">
+        3 Reasons To Choose Us
+      </h2>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+        {reasons.map((reason) => (
+          <article
+            key={reason.title}
+            className="relative rounded-[1.65rem] border border-[#d2e1d8] bg-white p-5 shadow-[0_14px_28px_rgba(10,60,50,0.12)]"
+          >
+            <span className="absolute right-0 top-0 h-9 w-9 rounded-bl-2xl border-b-2 border-l-2 border-[#2d7167]/65" />
+            <div className="mb-3 inline-flex rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-800">
+              <reason.icon className="h-5 w-5" />
+            </div>
+            <h3 className="text-2xl font-semibold tracking-tight text-[#163530]">{reason.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-[#355750]">{reason.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StepsSection() {
+  return (
+    <section className="space-y-8">
+      <h2 className="text-center text-3xl font-semibold tracking-tight text-[#142f2b] sm:text-4xl">
+        4 Simple Steps to Guaranteed Payment.
+      </h2>
+
+      <div className="grid gap-8 lg:grid-cols-[0.95fr_1fr_0.8fr]">
+        <ol className="rounded-3xl border border-[#c9ddd3] bg-[#f9f5ea] px-5 py-4">
+          {guaranteeSteps.map((step, index) => (
+            <li key={step} className="flex gap-3 border-b border-emerald-900/15 py-3 last:border-b-0">
+              <span className="text-xl font-semibold text-[#1f5f55]">{index + 1}.</span>
+              <span className="text-xl font-semibold leading-tight text-[#183a34]">{step}</span>
+            </li>
+          ))}
+        </ol>
+
+        <div className="flex items-center justify-center rounded-[2.25rem] border border-[#c3d8ce] bg-gradient-to-b from-[#f2ecdd] via-[#ecf3ec] to-[#e8eee0] p-3">
+          <StepsImageFrame />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 rounded-3xl border border-[#c9ddd3] bg-[#f8f3e8] p-4 lg:grid-cols-1">
+          {stepStats.map((stat) => (
+            <div key={stat.label} className="rounded-2xl border border-emerald-900/10 bg-white/90 px-4 py-3 text-right shadow-sm">
+              <p className="text-4xl font-semibold tracking-tight text-[#1f5f55]">{stat.value}</p>
+              <p className="text-sm text-[#365f57]">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeaturedCategories() {
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-emerald-900/20 bg-gradient-to-b from-[#0f4f49] to-[#0a3733] p-5 text-white shadow-[0_18px_36px_rgba(2,24,20,0.35)]">
+      <h2 className="text-center text-3xl font-semibold tracking-tight">Featured Project Categories</h2>
+      <div className="mt-5 grid gap-3">
+        {categories.map((category) => (
+          <article key={category.title} className="rounded-2xl border border-emerald-200/20 bg-emerald-950/45 p-4 backdrop-blur-sm">
+            <div className="mb-2 inline-flex rounded-lg bg-emerald-200/15 p-2 text-emerald-100">
+              <category.icon className="h-4 w-4" />
+            </div>
+            <h3 className="text-xl font-semibold tracking-tight">{category.title}</h3>
+            <p className="mt-1 text-sm text-emerald-100/80">{category.description}</p>
+            <Link href="#" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-100/95">
+              Read More <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FullRightStylePage() {
+  return (
+    <section className="min-h-screen bg-[var(--tl-cream)]">
+      <div className="tl-hero-surface relative px-4 pb-6 pt-5 text-white sm:px-6">
+        <div className="mx-auto max-w-[1160px]">
+          <TopNav />
+
+          <div className="mt-7 grid gap-6 md:grid-cols-[1.05fr_0.95fr] md:items-center">
+            <div className="space-y-4">
+              <RatingRow />
+              <h1 className="max-w-[14ch] text-5xl font-semibold leading-tight tracking-tight sm:text-6xl">
+                Securing Freelancer Payments, Built on Trust.
+              </h1>
+              <p className="text-sm leading-relaxed text-emerald-50/88 sm:text-base">
+                Funds are securely locked in a smart locker via Stellar blockchain, and freelancers get paid on
+                milestone approval.
+              </p>
+              <HeroActions />
+            </div>
+
+            <div className="md:justify-self-end">
+              <HeroImageFrame />
+            </div>
+          </div>
+
+          <TrustStats />
+        </div>
+      </div>
+
+      <div className="bg-[var(--tl-cream)] px-4 pb-10 pt-8 sm:px-6">
+        <div className="mx-auto max-w-[1160px] space-y-10">
+          <ReasonsSection />
+          <StepsSection />
+          <FeaturedCategories />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <div className="tl-shell min-h-screen text-[#14342f]">
+      <style>{landingStyles}</style>
+
+      <main className="w-full">
+        <div className="tl-fade-in">
+          <FullRightStylePage />
+        </div>
+      </main>
+
+      <div className="pointer-events-none fixed bottom-3 right-3 rounded-full border border-white/35 bg-white/20 p-2 text-white/80 backdrop-blur-sm">
+        <LockKeyhole className="h-4 w-4" />
+      </div>
+    </div>
   );
 }
